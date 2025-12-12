@@ -1,0 +1,7 @@
+{
+  "name": "Minbar AI",
+  "description": "An AI-powered platform for Khateebs to manage sermons, schedule engagements, and practice delivery.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
