@@ -158,10 +158,9 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
             return;
         }
 
-        if (!idToFetch) return; 
+        if (!idToFetch) return; // Should not happen if logic is correct, but safety check
 
         setLoading(true);
-        console.log('Loading cards for khutbah ID:', idToFetch);
         
         // Fetch cards
         const { data: realCards, error } = await supabase
@@ -169,8 +168,6 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
             .select('id, card_number, section_label, title, bullet_points, arabic_text, key_quote, quote_source, transition_text, time_estimate_seconds, notes')
             .eq('khutbah_id', idToFetch)
             .order('card_number', { ascending: true });
-
-        console.log('Cards returned from DB:', realCards);
 
         // Fetch title if needed
         if (!selectedKhutbahTitle) {
@@ -217,21 +214,16 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
       setLoading(true);
       setSelectedKhutbahTitle(title);
       
-      console.log('User selected khutbah ID:', id);
-
       const { data: realCards } = await supabase
         .from('khutbah_cards')
-        .select('id, card_number, section_label, title, bullet_points, arabic_text, key_quote, quote_source, transition_text, time_estimate_seconds, notes')
+        .select('*')
         .eq('khutbah_id', id)
         .order('card_number', { ascending: true });
     
-      console.log('Cards returned for selection:', realCards);
-
       if (realCards && realCards.length > 0) {
         setCards(realCards);
         setCardTimeLeft(realCards[0].time_estimate_seconds || 120);
       } else {
-        console.warn('No specific cards found, falling back to MOCK_CARDS');
         setCards(MOCK_CARDS);
         setCardTimeLeft(MOCK_CARDS[0].time_estimate_seconds);
       }

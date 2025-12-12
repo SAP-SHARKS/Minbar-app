@@ -12,50 +12,34 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   const timerRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Initialize Speech Recognition lazily
-  const initSpeechRecognition = () => {
+  useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setError("Your browser does not support Speech Recognition. Please try Chrome or Edge.");
-      return null;
+      return;
     }
-    
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US'; 
 
     recognition.onresult = (event: any) => {
+      let interimTranscript = '';
       let finalTranscriptChunk = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) finalTranscriptChunk += event.results[i][0].transcript;
+        else interimTranscript += event.results[i][0].transcript;
       }
       if (finalTranscriptChunk) updateTranscriptAndStats(finalTranscriptChunk);
     };
-    
     recognition.onerror = (event: any) => {
-      console.warn("Speech recognition error", event.error);
       if (event.error === 'not-allowed') {
         setError("Microphone access denied. Please allow permissions.");
         setIsRecording(false);
       }
     };
-    
-    return recognition;
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => { 
-        if (recognitionRef.current) {
-            try {
-                recognitionRef.current.stop(); 
-            } catch (e) {
-                // Ignore stop errors on unmount
-            }
-        }
-        if (timerRef.current) clearInterval(timerRef.current);
-    };
+    recognitionRef.current = recognition;
+    return () => { if (recognitionRef.current) recognitionRef.current.stop(); };
   }, []);
 
   useEffect(() => {
@@ -83,40 +67,13 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   };
 
   const toggleRecording = () => {
-    if (isRecording) {
-        if (recognitionRef.current) recognitionRef.current.stop();
-        setIsRecording(false);
-    } else {
-        setError(null);
-        
-        // Lazy Init
-        if (!recognitionRef.current) {
-            const recognition = initSpeechRecognition();
-            if (!recognition) return;
-            recognitionRef.current = recognition;
-        }
-
-        try {
-            recognitionRef.current.start();
-            setIsRecording(true);
-        } catch (err) {
-            console.error("Mic start error", err);
-            // If it's already started, just set state true
-            setIsRecording(true);
-        }
-    }
+    if (isRecording) { recognitionRef.current.stop(); setIsRecording(false); }
+    else { setError(null); try { recognitionRef.current.start(); setIsRecording(true); } catch (err) { console.error("Mic start error", err); } }
   };
 
   const reset = () => {
-    if (isRecording) { 
-        if (recognitionRef.current) recognitionRef.current.stop(); 
-        setIsRecording(false); 
-    }
-    setElapsedTime(0); 
-    setFillerCount({ um: 0, uh: 0, yaani: 0, like: 0 }); 
-    setTranscript(''); 
-    setWordCount(0); 
-    setError(null);
+    if (isRecording) { recognitionRef.current.stop(); setIsRecording(false); }
+    setElapsedTime(0); setFillerCount({ um: 0, uh: 0, yaani: 0, like: 0 }); setTranscript(''); setWordCount(0); setError(null);
   };
 
   const formatTime = (seconds: number) => {

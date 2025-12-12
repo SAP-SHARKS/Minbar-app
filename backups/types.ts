@@ -14,7 +14,6 @@ export interface KhutbahPreview {
   published_at?: string;
   likes: number;
   comments_count?: number;
-  rating?: number; // Added rating
 }
 
 export interface Khutbah {
@@ -30,22 +29,6 @@ export interface Khutbah {
   comments?: Comment[];
   file_url?: string;
   view_count?: number;
-  rating?: number; // Added rating
-}
-
-export interface KhutbahCard {
-  id: string;
-  khutbah_id?: string;
-  card_number: number;
-  section_label: string; // "INTRO", "MAIN", etc.
-  title: string;
-  bullet_points: string[];
-  arabic_text?: string;
-  key_quote?: string;
-  quote_source?: string;
-  transition_text?: string;
-  time_estimate_seconds: number;
-  notes?: string;
 }
 
 export interface Topic {

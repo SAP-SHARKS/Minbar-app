@@ -11,7 +11,7 @@ import { supabase } from '../supabaseClient';
 interface KhutbahLibraryProps {
   user: any;
   showHero?: boolean;
-  onStartLive?: () => void;
+  onStartLive?: (id?: string) => void;
 }
 
 const getTagStyles = (tag: string) => {
@@ -230,6 +230,16 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                     <span className="w-8 text-center font-bold text-gray-700 select-none">{contentFontSize}</span>
                     <button onClick={() => setContentFontSize(s => Math.min(48, s+2))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><Plus size={16} /></button>
                  </div>
+                 
+                 {onStartLive && (
+                    <button 
+                        onClick={() => onStartLive(selectedKhutbah.id)}
+                        className="flex items-center gap-2 bg-red-50 text-red-600 border border-red-100 px-6 py-3 rounded-full hover:bg-red-100 transition-colors shadow-sm font-bold animate-in fade-in"
+                    >
+                        <Play size={20} fill="currentColor"/> Go Live
+                    </button>
+                 )}
+
                  <button className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-6 py-3 rounded-full hover:bg-gray-50 transition-colors shadow-sm font-bold">
                     <Star size={20} className="text-yellow-400 fill-current"/> Rate
                  </button>
@@ -299,7 +309,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                     <div className="absolute right-3 top-3 bottom-3"><button className="h-full bg-gray-900 text-white px-10 rounded-full font-bold text-lg hover:bg-gray-800 transition-colors">Search</button></div>
                 </div>
                 <div className="flex justify-center gap-6">
-                    <button onClick={onStartLive} className="bg-white border border-gray-200 text-gray-700 px-8 py-4 rounded-2xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center gap-3 text-lg"><Play size={24} className="text-red-500 fill-current" /> Practice Mode</button>
+                    <button onClick={() => onStartLive?.()} className="bg-white border border-gray-200 text-gray-700 px-8 py-4 rounded-2xl font-bold shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center gap-3 text-lg"><Play size={24} className="text-red-500 fill-current" /> Practice Mode</button>
                     <button className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center gap-3 text-lg"><FileText size={24} /> New Draft</button>
                 </div>
              </div>
