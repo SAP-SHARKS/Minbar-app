@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   LayoutDashboard, FileText, Mic, Calendar as CalendarIcon, 
-  MessageSquare, User, LogOut, Play, GraduationCap, UploadCloud, BookHeart
+  MessageSquare, User, LogOut, Play, GraduationCap, UploadCloud
 } from 'lucide-react';
 import { KhateebIcon } from './Icons';
 
@@ -13,8 +13,7 @@ interface NavigationProps {
 
 export const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab, unreadCount }) => {
   const navItems = [
-    { id: 'dashboard', icon: LayoutDashboard, label: 'Library', color: 'emerald' },
-    { id: 'my-khutbahs', icon: BookHeart, label: 'My Khutbahs', color: 'rose' },
+    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', color: 'emerald' },
     { id: 'live', icon: Play, label: 'Live Mode', special: true, color: 'red' },
     { id: 'calendar', icon: CalendarIcon, label: 'Calendar', color: 'blue' }, 
     { id: 'finder', icon: KhateebIcon, label: 'Khateeb DB', color: 'purple' },
@@ -38,7 +37,6 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab,
           if (isActive) {
              switch (item.color) {
                case 'emerald': activeClasses = "bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm"; break;
-               case 'rose': activeClasses = "bg-rose-50 text-rose-600 border-rose-200 shadow-sm"; break;
                case 'red': activeClasses = "bg-red-50 text-red-600 border-red-200 shadow-sm"; break;
                case 'blue': activeClasses = "bg-blue-50 text-blue-600 border-blue-200 shadow-sm"; break;
                case 'purple': activeClasses = "bg-purple-50 text-purple-600 border-purple-200 shadow-sm"; break;

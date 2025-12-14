@@ -14,7 +14,7 @@ interface LiveMinbarProps {
 
 interface KhutbahCard {
   id: string;
-  khutbah_id: string;
+  user_khutbah_id: string;
   card_number: number;
   section_label: string;
   title: string;
@@ -41,7 +41,7 @@ const SECTION_COLORS: Record<string, string> = {
 const MOCK_CARDS: KhutbahCard[] = [
     {
       id: 'mock1',
-      khutbah_id: 'mock',
+      user_khutbah_id: 'mock',
       card_number: 1,
       section_label: 'INTRO',
       title: 'Khutbah al-Hajjah',
@@ -56,7 +56,7 @@ const MOCK_CARDS: KhutbahCard[] = [
     },
     {
       id: 'mock2',
-      khutbah_id: 'mock',
+      user_khutbah_id: 'mock',
       card_number: 2,
       section_label: 'MAIN',
       title: 'The Reality of Sabr',
@@ -72,7 +72,7 @@ const MOCK_CARDS: KhutbahCard[] = [
     },
     {
       id: 'mock3',
-      khutbah_id: 'mock',
+      user_khutbah_id: 'mock',
       card_number: 3,
       section_label: 'CLOSING',
       title: 'Action Items & Dua',
@@ -124,16 +124,17 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
   useEffect(() => {
     if (!isSelecting) return;
 
+    // Fetch from user_khutbahs for selection screen
     const fetchKhutbahs = async () => {
       let query = supabase
-        .from('khutbahs')
-        .select('id, title, author, topic')
-        .order('created_at', { ascending: false })
+        .from('user_khutbahs')
+        .select('id, title, author')
+        .eq('user_id', user.uid || user.id)
+        .order('updated_at', { ascending: false })
         .limit(50);
 
       if (searchQuery.trim()) {
-        const term = `%${searchQuery.trim()}%`;
-        query = query.or(`title.ilike.${term},author.ilike.${term},topic.ilike.${term}`);
+        query = query.ilike('title', `%${searchQuery.trim()}%`);
       }
 
       const { data, error } = await query;
@@ -145,14 +146,13 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
 
     const debounce = setTimeout(fetchKhutbahs, 300);
     return () => clearTimeout(debounce);
-  }, [isSelecting, searchQuery]);
+  }, [isSelecting, searchQuery, user]);
 
   // --- Load Selected Khutbah Data ---
   useEffect(() => {
     async function loadCards() {
         const idToFetch = khutbahId; 
         
-        // If no ID provided and we haven't selected one locally, we are in selection mode
         if (!idToFetch && !selectedKhutbahTitle) {
             setLoading(false);
             return;
@@ -161,20 +161,17 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
         if (!idToFetch) return; 
 
         setLoading(true);
-        console.log('Loading cards for khutbah ID:', idToFetch);
         
-        // Fetch cards
+        // Fetch from user_khutbah_cards
         const { data: realCards, error } = await supabase
-            .from('khutbah_cards')
+            .from('user_khutbah_cards')
             .select('id, card_number, section_label, title, bullet_points, arabic_text, key_quote, quote_source, transition_text, time_estimate_seconds, notes')
-            .eq('khutbah_id', idToFetch)
+            .eq('user_khutbah_id', idToFetch)
             .order('card_number', { ascending: true });
-
-        console.log('Cards returned from DB:', realCards);
 
         // Fetch title if needed
         if (!selectedKhutbahTitle) {
-            const { data: kData } = await supabase.from('khutbahs').select('title').eq('id', idToFetch).single();
+            const { data: kData } = await supabase.from('user_khutbahs').select('title').eq('id', idToFetch).single();
             if (kData) setSelectedKhutbahTitle(kData.title);
         }
 
@@ -217,21 +214,16 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
       setLoading(true);
       setSelectedKhutbahTitle(title);
       
-      console.log('User selected khutbah ID:', id);
-
       const { data: realCards } = await supabase
-        .from('khutbah_cards')
-        .select('id, card_number, section_label, title, bullet_points, arabic_text, key_quote, quote_source, transition_text, time_estimate_seconds, notes')
-        .eq('khutbah_id', id)
+        .from('user_khutbah_cards')
+        .select('*')
+        .eq('user_khutbah_id', id)
         .order('card_number', { ascending: true });
     
-      console.log('Cards returned for selection:', realCards);
-
       if (realCards && realCards.length > 0) {
         setCards(realCards);
         setCardTimeLeft(realCards[0].time_estimate_seconds || 120);
       } else {
-        console.warn('No specific cards found, falling back to MOCK_CARDS');
         setCards(MOCK_CARDS);
         setCardTimeLeft(MOCK_CARDS[0].time_estimate_seconds);
       }
@@ -246,9 +238,6 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
 
   // --- Selection Screen ---
   if (isSelecting) {
-      // Use availableKhutbahs directly as they are already filtered by the server
-      const displayKhutbahs = availableKhutbahs;
-
       return (
           <div className="fixed inset-0 bg-gray-50 z-50 p-8 overflow-y-auto font-sans">
               <div className="max-w-4xl mx-auto">
@@ -262,7 +251,7 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                       <input 
                           type="text" 
-                          placeholder="Search your library..." 
+                          placeholder="Search your khutbahs..." 
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-emerald-500 outline-none text-lg transition-all"
@@ -270,11 +259,11 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
                   </div>
 
                   <div className="grid gap-4">
-                      {displayKhutbahs.map(k => (
+                      {availableKhutbahs.map(k => (
                           <div key={k.id} onClick={() => handleKhutbahSelect(k.id, k.title)} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:border-emerald-500 hover:shadow-md cursor-pointer transition-all flex justify-between items-center group">
                               <div>
                                   <h3 className="text-xl font-bold text-gray-800 group-hover:text-emerald-700">{k.title}</h3>
-                                  <p className="text-gray-500 mt-1">{k.topic} • {k.author}</p>
+                                  <p className="text-gray-500 mt-1">{k.author}</p>
                               </div>
                               <div className="flex items-center gap-3">
                                   <span className="text-xs font-bold bg-gray-100 text-gray-600 px-3 py-1 rounded-full uppercase">Ready</span>
@@ -283,10 +272,11 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
                           </div>
                       ))}
                       
-                      {displayKhutbahs.length === 0 && (
+                      {availableKhutbahs.length === 0 && (
                           <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-dashed border-gray-200">
                               <Search size={48} className="mx-auto mb-4 opacity-20"/>
-                              <p className="text-lg font-medium">No khutbahs found matching "{searchQuery}"</p>
+                              <p className="text-lg font-medium">No personal khutbahs found matching "{searchQuery}"</p>
+                              <p className="text-sm mt-2">Add khutbahs to your collection first.</p>
                           </div>
                       )}
 

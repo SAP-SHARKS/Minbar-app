@@ -15,7 +15,6 @@ import { KhutbahUpload } from './components/KhutbahUpload';
 import { MyKhutbahs } from './components/MyKhutbahs';
 import { UserMenu } from './components/UserMenu';
 import { useAuth } from './contexts/AuthContext';
-import { LoginModal } from './components/LoginModal';
 
 export default function App() {
   const { user, isLoading } = useAuth();
@@ -34,9 +33,6 @@ export default function App() {
 
   return (
     <div className="font-sans antialiased text-gray-900 h-screen overflow-hidden flex bg-gray-50">
-      {/* Global Modal */}
-      <LoginModal />
-
       <Navigation activeTab={activeTab} setActiveTab={setActiveTab} unreadCount={2} />
 
       {activeTab !== 'live' && (

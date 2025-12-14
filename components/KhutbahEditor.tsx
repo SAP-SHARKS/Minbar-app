@@ -14,7 +14,7 @@ import { supabase } from '../supabaseClient';
 // --- Types ---
 interface KhutbahCard {
   id: string;
-  khutbah_id: string;
+  user_khutbah_id: string; // Changed from khutbah_id to user_khutbah_id
   card_number: number;
   section_label: 'INTRO' | 'MAIN' | 'HADITH' | 'QURAN' | 'STORY' | 'PRACTICAL' | 'CLOSING';
   title: string;
@@ -69,18 +69,18 @@ const BulletPointsEditor = ({ points, onChange }: { points: string[], onChange: 
   );
 };
 
-export const KhutbahEditor = ({ user }: { user: any }) => {
+interface KhutbahEditorProps {
+  user: any;
+  khutbahId: string | null;
+  onGoLive?: (id: string) => void;
+}
+
+export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, onGoLive }) => {
   const [mode, setMode] = useState<'write' | 'cards'>('write');
-  const [content, setContent] = useState<string>(`
-    <h1>The Power of Patience (Sabr)</h1>
-    <p>In the name of Allah, the Most Gracious, the Most Merciful.</p>
-    <p><br></p>
-    <p>My dear brothers and sisters, today we wish to speak about a quality that liberates the heart: <strong>Patience (Sabr)</strong>. It is often seen as a weakness, but in reality, it is the ultimate strength.</p>
-  `);
+  const [content, setContent] = useState<string>('');
   
   // Card Editor State
   const [cards, setCards] = useState<KhutbahCard[]>([]);
-  const [activeKhutbahId, setActiveKhutbahId] = useState<string | null>(null);
   const [khutbahTitle, setKhutbahTitle] = useState("New Khutbah");
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [isCardsLoading, setIsCardsLoading] = useState(false);
@@ -93,34 +93,38 @@ export const KhutbahEditor = ({ user }: { user: any }) => {
 
   // --- Fetch Initial Data ---
   useEffect(() => {
-    const fetchActiveKhutbah = async () => {
+    const fetchKhutbahData = async () => {
+        if (!khutbahId) return; // Should handle empty state or new creation logic separately
+
         setIsCardsLoading(true);
-        // For this demo, fetch the most recent khutbah or create a placeholder context
-        const { data } = await supabase
-            .from('khutbahs')
-            .select('id, title')
-            .order('created_at', { ascending: false })
-            .limit(1)
+        // Fetch from user_khutbahs
+        const { data: kData } = await supabase
+            .from('user_khutbahs')
+            .select('*')
+            .eq('id', khutbahId)
             .single();
 
-        if (data) {
-            setActiveKhutbahId(data.id);
-            setKhutbahTitle(data.title);
-            fetchCards(data.id);
+        if (kData) {
+            setKhutbahTitle(kData.title);
+            setContent(kData.content || '');
+            fetchCards(khutbahId);
         } else {
-            // No khutbah found, maybe handle creating one later
-            setKhutbahTitle("No Khutbahs Found");
+            setKhutbahTitle("Khutbah Not Found");
             setIsCardsLoading(false);
         }
     };
-    fetchActiveKhutbah();
-  }, []);
+    
+    if (khutbahId) {
+        fetchKhutbahData();
+    }
+  }, [khutbahId]);
 
   const fetchCards = async (id: string) => {
+      // Fetch from user_khutbah_cards
       const { data, error } = await supabase
-        .from('khutbah_cards')
+        .from('user_khutbah_cards')
         .select('*')
-        .eq('khutbah_id', id)
+        .eq('user_khutbah_id', id)
         .order('card_number', { ascending: true });
 
       if (data && data.length > 0) {
@@ -145,7 +149,7 @@ export const KhutbahEditor = ({ user }: { user: any }) => {
       setIsSaving(true);
       
       const { error } = await supabase
-        .from('khutbah_cards')
+        .from('user_khutbah_cards')
         .update({
             title: activeCard.title,
             section_label: activeCard.section_label,
@@ -166,12 +170,12 @@ export const KhutbahEditor = ({ user }: { user: any }) => {
   };
 
   const handleAddCard = async () => {
-      if (!activeKhutbahId) return;
+      if (!khutbahId) return;
       
       const nextNumber = cards.length > 0 ? Math.max(...cards.map(c => c.card_number)) + 1 : 1;
       
       const newCardPayload = {
-          khutbah_id: activeKhutbahId,
+          user_khutbah_id: khutbahId,
           card_number: nextNumber,
           section_label: 'MAIN',
           title: 'New Card',
@@ -185,7 +189,7 @@ export const KhutbahEditor = ({ user }: { user: any }) => {
       };
 
       const { data, error } = await supabase
-        .from('khutbah_cards')
+        .from('user_khutbah_cards')
         .insert(newCardPayload)
         .select()
         .single();
@@ -202,7 +206,7 @@ export const KhutbahEditor = ({ user }: { user: any }) => {
       if (!confirm('Are you sure you want to delete this card?')) return;
       
       const { error } = await supabase
-        .from('khutbah_cards')
+        .from('user_khutbah_cards')
         .delete()
         .eq('id', id);
       
@@ -225,9 +229,20 @@ export const KhutbahEditor = ({ user }: { user: any }) => {
     }, 1500);
   };
 
+  if (!khutbahId) {
+      return (
+          <div className="flex h-full md:pl-20 items-center justify-center bg-gray-50 text-gray-400">
+              <div className="text-center">
+                  <FileText size={48} className="mx-auto mb-4 opacity-30" />
+                  <p className="text-xl font-medium">Select a khutbah from "My Khutbahs" to edit.</p>
+              </div>
+          </div>
+      );
+  }
+
   // --- Render ---
   return (
-    <div className="flex flex-col h-screen bg-[#F9FBFD] overflow-hidden">
+    <div className="flex flex-col h-full md:pl-20 bg-[#F9FBFD] overflow-hidden">
       
       {/* --- Header & Toolbar --- */}
       <div className="bg-white px-4 pt-3 pb-2 shadow-sm z-20 border-b border-gray-200 flex flex-col gap-3">
@@ -270,6 +285,12 @@ export const KhutbahEditor = ({ user }: { user: any }) => {
                     <LayoutList size={16}/> Cards
                 </button>
              </div>
+
+             {onGoLive && (
+                 <button onClick={() => onGoLive(khutbahId)} className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow hover:bg-red-700">
+                     Go Live
+                 </button>
+             )}
 
              <div className="w-px h-6 bg-gray-300 mx-2"></div>
 
@@ -317,7 +338,7 @@ export const KhutbahEditor = ({ user }: { user: any }) => {
                 <div className="w-72 bg-white border-r border-gray-200 flex flex-col h-full">
                     <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                         <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider">Live Cards</h3>
-                        <button onClick={handleAddCard} disabled={!activeKhutbahId} className="text-emerald-600 hover:text-emerald-700 disabled:opacity-50"><PlusCircle size={20}/></button>
+                        <button onClick={handleAddCard} className="text-emerald-600 hover:text-emerald-700"><PlusCircle size={20}/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                         {isCardsLoading ? (
