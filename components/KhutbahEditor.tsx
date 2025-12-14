@@ -2,21 +2,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Bold, Italic, Underline, 
   AlignLeft, AlignCenter, AlignRight, 
-  List, ListOrdered, Link as LinkIcon, 
-  Undo, Redo, Sparkles, ChevronRight, 
-  X, ChevronLeft, Type,
-  BookOpen, Globe, Quote, Smile,
-  MoreHorizontal, Printer, Minus, Plus,
-  FileText, CheckCircle, LayoutList, PlusCircle, Trash2, Save, Loader2
+  List, ListOrdered, Undo, Redo, Sparkles, 
+  Printer, Minus, Plus, FileText, LayoutList, 
+  PlusCircle, Trash2, Save, Loader2, X, Check,
+  BookOpen, AlertTriangle, Thermometer
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { analyzeText } from '../utils';
+import { Stats } from '../types';
 
 // --- Types ---
 interface KhutbahCard {
   id: string;
-  user_khutbah_id: string; // Changed from khutbah_id to user_khutbah_id
+  user_khutbah_id: string; 
   card_number: number;
-  section_label: 'INTRO' | 'MAIN' | 'HADITH' | 'QURAN' | 'STORY' | 'PRACTICAL' | 'CLOSING';
+  section_label: string;
   title: string;
   bullet_points: string[];
   arabic_text: string;
@@ -36,6 +36,8 @@ const SECTION_OPTIONS = [
   { value: 'PRACTICAL', label: 'Practical', color: 'bg-orange-100' },
   { value: 'CLOSING', label: 'Closing', color: 'bg-rose-100' },
 ];
+
+// --- Subcomponents ---
 
 const BulletPointsEditor = ({ points, onChange }: { points: string[], onChange: (p: string[]) => void }) => {
   const addPoint = () => onChange([...points, '']);
@@ -69,75 +71,167 @@ const BulletPointsEditor = ({ points, onChange }: { points: string[], onChange: 
   );
 };
 
+const AiStatCard = ({ label, value, subtext, icon: Icon, colorClass }: any) => (
+    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-4">
+        <div className="flex items-center gap-3 mb-2">
+            <div className={`p-2 rounded-lg ${colorClass} bg-opacity-10`}>
+                <Icon size={18} className={colorClass.replace('bg-', 'text-')} />
+            </div>
+            <span className="font-bold text-gray-700 text-sm">{label}</span>
+        </div>
+        <div className="text-2xl font-bold text-gray-900">{value}</div>
+        <div className="text-xs text-gray-500 mt-1">{subtext}</div>
+    </div>
+);
+
 interface KhutbahEditorProps {
   user: any;
   khutbahId: string | null;
   onGoLive?: (id: string) => void;
+  onSaveNew?: (id: string) => void;
 }
 
-export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, onGoLive }) => {
+export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, onGoLive, onSaveNew }) => {
   const [mode, setMode] = useState<'write' | 'cards'>('write');
-  const [content, setContent] = useState<string>('');
+  const [content, setContent] = useState<string>('<p>In the name of Allah...</p>');
   
-  // Card Editor State
+  // Editor State
+  const [activeKhutbahId, setActiveKhutbahId] = useState<string | null>(khutbahId);
+  const [khutbahTitle, setKhutbahTitle] = useState("Untitled Khutbah");
   const [cards, setCards] = useState<KhutbahCard[]>([]);
-  const [khutbahTitle, setKhutbahTitle] = useState("New Khutbah");
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-  const [isCardsLoading, setIsCardsLoading] = useState(false);
+  
+  // UI State
   const [isSaving, setIsSaving] = useState(false);
-
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('unsaved');
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [fontSize, setFontSize] = useState(11);
+  const [aiStats, setAiStats] = useState<Stats | null>(null);
+  const [fontSize, setFontSize] = useState(11); // pt size approx
+  
   const editorRef = useRef<HTMLDivElement>(null);
 
-  // --- Fetch Initial Data ---
+  // --- Initialize ---
   useEffect(() => {
-    const fetchKhutbahData = async () => {
-        if (!khutbahId) return; // Should handle empty state or new creation logic separately
+    setActiveKhutbahId(khutbahId);
+    
+    if (khutbahId) {
+        fetchKhutbahData(khutbahId);
+    } else {
+        // Reset for new khutbah
+        setKhutbahTitle("Untitled Khutbah");
+        setContent("");
+        setCards([]);
+        setSaveStatus('unsaved');
+    }
+  }, [khutbahId]);
 
-        setIsCardsLoading(true);
+  // Sync content to DOM when it changes externally
+  useEffect(() => {
+    if (editorRef.current) {
+        if (editorRef.current.innerHTML !== content) {
+            editorRef.current.innerHTML = content;
+        }
+    }
+  }, [content]);
+
+  const fetchKhutbahData = async (id: string) => {
         // Fetch from user_khutbahs
         const { data: kData } = await supabase
             .from('user_khutbahs')
             .select('*')
-            .eq('id', khutbahId)
+            .eq('id', id)
             .single();
 
         if (kData) {
             setKhutbahTitle(kData.title);
             setContent(kData.content || '');
-            fetchCards(khutbahId);
-        } else {
-            setKhutbahTitle("Khutbah Not Found");
-            setIsCardsLoading(false);
+            setSaveStatus('saved');
+            
+            // Fetch cards
+            const { data: cData } = await supabase
+                .from('user_khutbah_cards')
+                .select('*')
+                .eq('user_khutbah_id', id)
+                .order('card_number', { ascending: true });
+            
+            if (cData) {
+                setCards(cData);
+                if (cData.length > 0) setSelectedCardId(cData[0].id);
+            }
         }
-    };
-    
-    if (khutbahId) {
-        fetchKhutbahData();
-    }
-  }, [khutbahId]);
-
-  const fetchCards = async (id: string) => {
-      // Fetch from user_khutbah_cards
-      const { data, error } = await supabase
-        .from('user_khutbah_cards')
-        .select('*')
-        .eq('user_khutbah_id', id)
-        .order('card_number', { ascending: true });
-
-      if (data && data.length > 0) {
-          setCards(data);
-          setSelectedCardId(data[0].id);
-      } else {
-          setCards([]);
-          setSelectedCardId(null);
-      }
-      setIsCardsLoading(false);
   };
 
-  // --- Helpers ---
+  // --- Handlers ---
+
+  const handleSave = async () => {
+      if (!user) return alert("Please sign in to save.");
+      setIsSaving(true);
+      setSaveStatus('saving');
+
+      try {
+          if (activeKhutbahId) {
+              // Update existing
+              await supabase
+                .from('user_khutbahs')
+                .update({ 
+                    title: khutbahTitle,
+                    content: content,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', activeKhutbahId);
+          } else {
+              // Create new
+              const { data, error } = await supabase
+                .from('user_khutbahs')
+                .insert({
+                    user_id: user.id || user.uid, // Handle both firebase/supabase user objects structure
+                    title: khutbahTitle,
+                    content: content,
+                    author: user.user_metadata?.full_name || 'Me',
+                    likes_count: 0
+                })
+                .select()
+                .single();
+              
+              if (error) throw error;
+              if (data) {
+                  setActiveKhutbahId(data.id);
+                  if (onSaveNew) onSaveNew(data.id);
+              }
+          }
+          setSaveStatus('saved');
+      } catch (err: any) {
+          console.error("Save error:", err);
+          alert("Failed to save: " + err.message);
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  const handleAiCheck = () => {
+    setShowAiPanel(true);
+    setIsAiLoading(true);
+    
+    // Analyze content (strip HTML tags for analysis)
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = content;
+    const textOnly = tempDiv.textContent || "";
+    
+    const stats = analyzeText(textOnly);
+    
+    setTimeout(() => {
+        setAiStats(stats);
+        setIsAiLoading(false);
+    }, 800);
+  };
+
+  const execCmd = (command: string, value: string | undefined = undefined) => {
+    document.execCommand(command, false, value);
+    if (editorRef.current) editorRef.current.focus();
+  };
+
+  // --- Card Helpers ---
   const activeCard = cards.find(c => c.id === selectedCardId);
 
   const updateLocalCard = (field: keyof KhutbahCard, value: any) => {
@@ -170,12 +264,12 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
   };
 
   const handleAddCard = async () => {
-      if (!khutbahId) return;
+      if (!activeKhutbahId) return alert("Please save the khutbah first before adding cards.");
       
       const nextNumber = cards.length > 0 ? Math.max(...cards.map(c => c.card_number)) + 1 : 1;
       
       const newCardPayload = {
-          user_khutbah_id: khutbahId,
+          user_khutbah_id: activeKhutbahId,
           card_number: nextNumber,
           section_label: 'MAIN',
           title: 'New Card',
@@ -197,48 +291,18 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
       if (data) {
           setCards([...cards, data]);
           setSelectedCardId(data.id);
-      } else if (error) {
-          console.error("Error creating card:", error);
       }
   };
 
   const handleDeleteCard = async (id: string) => {
       if (!confirm('Are you sure you want to delete this card?')) return;
-      
-      const { error } = await supabase
-        .from('user_khutbah_cards')
-        .delete()
-        .eq('id', id);
-      
+      const { error } = await supabase.from('user_khutbah_cards').delete().eq('id', id);
       if (!error) {
           const newCards = cards.filter(c => c.id !== id);
           setCards(newCards);
-          if (selectedCardId === id && newCards.length > 0) {
-              setSelectedCardId(newCards[0].id);
-          } else if (newCards.length === 0) {
-              setSelectedCardId(null);
-          }
+          if (selectedCardId === id) setSelectedCardId(newCards[0]?.id || null);
       }
   };
-
-  const handleAiCheck = () => {
-    setShowAiPanel(true);
-    setIsAiLoading(true);
-    setTimeout(() => {
-      setIsAiLoading(false);
-    }, 1500);
-  };
-
-  if (!khutbahId) {
-      return (
-          <div className="flex h-full md:pl-20 items-center justify-center bg-gray-50 text-gray-400">
-              <div className="text-center">
-                  <FileText size={48} className="mx-auto mb-4 opacity-30" />
-                  <p className="text-xl font-medium">Select a khutbah from "My Khutbahs" to edit.</p>
-              </div>
-          </div>
-      );
-  }
 
   // --- Render ---
   return (
@@ -248,28 +312,33 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
       <div className="bg-white px-4 pt-3 pb-2 shadow-sm z-20 border-b border-gray-200 flex flex-col gap-3">
         <div className="flex justify-between items-center px-2">
           <div className="flex items-center gap-4">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-blue-200 shadow-lg">
               <FileText className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <input 
-                  type="text" 
-                  value={khutbahTitle}
-                  readOnly
-                  className="font-medium text-lg text-gray-800 outline-none hover:border-gray-300 border border-transparent px-1 rounded transition-colors bg-transparent truncate max-w-[300px]"
-                />
-                <span className="text-gray-400 text-xs px-2 py-0.5 border border-gray-300 rounded-md">Saved</span>
-              </div>
-              <div className="flex gap-4 text-sm text-gray-600 mt-1">
-                {['File', 'Edit', 'View', 'Insert', 'Format', 'Tools', 'Extensions', 'Help'].map(menu => (
-                  <button key={menu} className="hover:bg-gray-100 px-2 rounded -ml-2 transition-colors">{menu}</button>
+              <input 
+                type="text" 
+                value={khutbahTitle}
+                onChange={(e) => {
+                    setKhutbahTitle(e.target.value);
+                    setSaveStatus('unsaved');
+                }}
+                className="font-bold text-xl text-gray-800 outline-none hover:bg-gray-50 border border-transparent focus:border-gray-300 px-2 rounded transition-colors bg-transparent truncate max-w-[300px] md:max-w-md"
+                placeholder="Untitled Khutbah"
+              />
+              <div className="flex gap-4 text-xs font-medium text-gray-500 mt-1 px-2">
+                {['File', 'Edit', 'View', 'Insert', 'Format', 'Tools'].map(menu => (
+                  <button key={menu} className="hover:text-gray-900 transition-colors">{menu}</button>
                 ))}
+                <span className="text-gray-300">|</span>
+                <span className={`transition-colors ${saveStatus === 'unsaved' ? 'text-amber-500' : 'text-emerald-500'}`}>
+                    {saveStatus === 'saved' ? 'All changes saved' : saveStatus === 'saving' ? 'Saving...' : 'Unsaved changes'}
+                </span>
               </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
              {/* Mode Switcher */}
              <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
                 <button 
@@ -280,34 +349,79 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
                 </button>
                 <button 
                     onClick={() => setMode('cards')}
-                    className={`px-3 py-1.5 rounded-md text-sm font-bold flex items-center gap-2 transition-all ${mode === 'cards' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    disabled={!activeKhutbahId}
+                    className={`px-3 py-1.5 rounded-md text-sm font-bold flex items-center gap-2 transition-all ${mode === 'cards' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-700 disabled:opacity-50'}`}
+                    title={!activeKhutbahId ? "Save khutbah first" : "Edit Cards"}
                 >
                     <LayoutList size={16}/> Cards
                 </button>
              </div>
 
-             {onGoLive && (
-                 <button onClick={() => onGoLive(khutbahId)} className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow hover:bg-red-700">
-                     Go Live
+             <button 
+                onClick={handleSave}
+                className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all shadow-sm ${saveStatus === 'unsaved' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+             >
+                 {isSaving ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>}
+                 {saveStatus === 'unsaved' ? 'Save' : 'Saved'}
+             </button>
+
+             {activeKhutbahId && onGoLive && (
+                 <button onClick={() => onGoLive(activeKhutbahId)} className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow hover:bg-red-700 flex items-center gap-2">
+                     <Sparkles size={16}/> Go Live
                  </button>
              )}
 
-             <div className="w-px h-6 bg-gray-300 mx-2"></div>
-
              <button 
-               onClick={handleAiCheck}
-               className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all shadow-sm ${showAiPanel ? 'bg-emerald-100 text-emerald-700 ring-2 ring-emerald-500 ring-offset-1' : 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:opacity-90'}`}
+               onClick={() => {
+                   if (showAiPanel) setShowAiPanel(false);
+                   else handleAiCheck();
+               }}
+               className={`ml-2 flex items-center gap-2 px-4 py-2 rounded-full font-medium transition-all shadow-sm ${showAiPanel ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-500 ring-offset-1' : 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:opacity-90'}`}
              >
-               <Sparkles size={16} fill="currentColor" className={isAiLoading ? "animate-spin" : ""} />
-               {isAiLoading ? 'Analyzing...' : 'AI Assist'}
+               <Sparkles size={16} fill="currentColor" />
+               AI Check
              </button>
           </div>
         </div>
 
-        {/* Conditional Toolbar */}
+        {/* Formatting Toolbar */}
         {mode === 'write' && (
-             <div className="flex items-center gap-1 bg-[#EDF2FA] p-1.5 rounded-full w-fit mx-auto md:mx-4">
-                  <div className="text-xs text-gray-400 font-medium px-4">Formatting Toolbar Active</div>
+             <div className="flex items-center gap-1 bg-[#EDF2FA] p-1.5 rounded-full w-fit mx-auto overflow-x-auto max-w-full no-scrollbar shadow-inner">
+                  {/* History */}
+                  <div className="flex gap-1 pr-2 border-r border-gray-300/50">
+                      <button onClick={() => execCmd('undo')} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors" title="Undo"><Undo size={18}/></button>
+                      <button onClick={() => execCmd('redo')} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors" title="Redo"><Redo size={18}/></button>
+                      <button onClick={() => window.print()} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors" title="Print"><Printer size={18}/></button>
+                  </div>
+
+                  {/* Text Style */}
+                  <div className="flex gap-1 px-2 border-r border-gray-300/50 items-center">
+                      <button onClick={() => setFontSize(s => Math.max(8, s-1))} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors"><Minus size={14}/></button>
+                      <div className="w-8 text-center bg-transparent text-sm font-medium text-gray-700 select-none">
+                          {fontSize}
+                      </div>
+                      <button onClick={() => setFontSize(s => Math.min(72, s+1))} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors"><Plus size={14}/></button>
+                  </div>
+
+                  {/* Formatting */}
+                  <div className="flex gap-1 px-2 border-r border-gray-300/50">
+                      <button onClick={() => execCmd('bold')} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors"><Bold size={18}/></button>
+                      <button onClick={() => execCmd('italic')} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors"><Italic size={18}/></button>
+                      <button onClick={() => execCmd('underline')} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors"><Underline size={18}/></button>
+                  </div>
+
+                  {/* Alignment */}
+                  <div className="flex gap-1 px-2 border-r border-gray-300/50">
+                      <button onClick={() => execCmd('justifyLeft')} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors"><AlignLeft size={18}/></button>
+                      <button onClick={() => execCmd('justifyCenter')} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors"><AlignCenter size={18}/></button>
+                      <button onClick={() => execCmd('justifyRight')} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors"><AlignRight size={18}/></button>
+                  </div>
+
+                  {/* Lists */}
+                  <div className="flex gap-1 px-2">
+                      <button onClick={() => execCmd('insertUnorderedList')} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors"><List size={18}/></button>
+                      <button onClick={() => execCmd('insertOrderedList')} className="p-2 hover:bg-[#D8E4F8] rounded-full text-gray-700 transition-colors"><ListOrdered size={18}/></button>
+                  </div>
              </div>
         )}
       </div>
@@ -317,18 +431,79 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
         
         {mode === 'write' ? (
             // --- WRITE MODE ---
-            <div className={`flex-1 overflow-y-auto bg-[#F9FBFD] relative`}>
-               <div className="min-h-full py-8 flex justify-center cursor-text" onClick={() => editorRef.current?.focus()}>
+            <div className={`flex-1 overflow-y-auto bg-[#F9FBFD] relative flex`}>
+               
+               {/* Document Area */}
+               <div className="flex-1 min-h-full py-8 flex justify-center cursor-text overflow-y-auto" onClick={() => editorRef.current?.focus()}>
                   <div 
                     ref={editorRef}
                     className="bg-white w-full max-w-[816px] min-h-[1056px] shadow-sm my-4 p-[96px] outline-none text-gray-800 leading-relaxed font-serif"
                     contentEditable
                     suppressContentEditableWarning
                     style={{ fontSize: `${fontSize}px` }}
-                    dangerouslySetInnerHTML={{ __html: content }}
-                    onInput={(e) => setContent(e.currentTarget.innerHTML)}
+                    onInput={(e) => {
+                        setContent(e.currentTarget.innerHTML);
+                        setSaveStatus('unsaved');
+                    }}
                   />
                </div>
+
+               {/* AI Sidebar */}
+               {showAiPanel && (
+                   <div className="w-80 bg-white border-l border-gray-200 shadow-xl overflow-y-auto z-10 animate-in slide-in-from-right duration-300">
+                       <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                           <h3 className="font-bold text-gray-800 flex items-center gap-2"><Sparkles size={18} className="text-indigo-600"/> AI Analysis</h3>
+                           <button onClick={() => setShowAiPanel(false)} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
+                       </div>
+                       
+                       <div className="p-6">
+                           {isAiLoading ? (
+                               <div className="flex flex-col items-center justify-center py-12 text-gray-400 gap-3">
+                                   <Loader2 size={32} className="animate-spin text-indigo-600"/>
+                                   <p className="text-sm font-medium">Analyzing Khutbah...</p>
+                               </div>
+                           ) : aiStats ? (
+                               <div className="space-y-6">
+                                   <div className="flex items-center justify-between mb-4">
+                                      <span className="text-xs font-bold uppercase text-gray-400 tracking-wider">Readability Score</span>
+                                      <span className={`px-2 py-1 rounded text-xs font-bold ${aiStats.grade < 8 ? 'bg-green-100 text-green-700' : aiStats.grade < 12 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                                          Grade {aiStats.grade}
+                                      </span>
+                                   </div>
+
+                                   <AiStatCard 
+                                      label="Hard Sentences" 
+                                      value={aiStats.hardSentences} 
+                                      subtext="Sentences > 20 words"
+                                      icon={AlertTriangle}
+                                      colorClass="bg-red-100 text-red-600"
+                                   />
+                                   
+                                   <AiStatCard 
+                                      label="Tone Check" 
+                                      value={`${aiStats.passive} Passive`} 
+                                      subtext="Aim for active voice"
+                                      icon={Thermometer}
+                                      colorClass="bg-blue-100 text-blue-600"
+                                   />
+
+                                   <div>
+                                       <h4 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2"><BookOpen size={16}/> Citations Found</h4>
+                                       <div className="space-y-2">
+                                           {aiStats.citations.length > 0 ? aiStats.citations.map((cite, i) => (
+                                               <div key={i} className={`text-xs p-2 rounded border ${cite.status === 'verified' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+                                                   {cite.type === 'quran' ? '📖' : '📜'} {cite.text}
+                                               </div>
+                                           )) : <p className="text-xs text-gray-400 italic">No citations detected.</p>}
+                                       </div>
+                                   </div>
+                               </div>
+                           ) : (
+                               <p className="text-center text-gray-400 py-10">Click AI Check to analyze.</p>
+                           )}
+                       </div>
+                   </div>
+               )}
             </div>
         ) : (
             // --- CARD EDITOR MODE ---
@@ -341,9 +516,7 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
                         <button onClick={handleAddCard} className="text-emerald-600 hover:text-emerald-700"><PlusCircle size={20}/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                        {isCardsLoading ? (
-                            <div className="flex justify-center py-10"><Loader2 className="animate-spin text-gray-400"/></div>
-                        ) : cards.length === 0 ? (
+                        {cards.length === 0 ? (
                             <div className="text-center py-10 text-gray-400 text-sm">No cards yet. Click + to add one.</div>
                         ) : (
                             cards.map((card, i) => (

@@ -10,7 +10,6 @@ import { Khutbah, KhutbahPreview, AuthorData } from '../types';
 import { supabase } from '../supabaseClient';
 import { useHomepageData, usePaginatedKhutbahs, useInfiniteScroll } from '../hooks';
 import { useAuth } from '../contexts/AuthContext';
-import { LoginModal } from './LoginModal';
 
 interface KhutbahLibraryProps {
   user: any;
@@ -19,7 +18,7 @@ interface KhutbahLibraryProps {
   onAddToMyKhutbahs?: (id: string) => void;
 }
 
-// ... Utility Components ...
+// --- Utility Components ---
 
 const getTagStyles = (tag: string) => {
   const styles = [
@@ -349,8 +348,9 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const [contentFontSize, setContentFontSize] = useState(18);
   const [isInMyKhutbahs, setIsInMyKhutbahs] = useState(false);
   const [addingToMyKhutbahs, setAddingToMyKhutbahs] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const { user: authUser } = useAuth(); // Use direct auth for actions
+  
+  // Use requireAuth from AuthContext instead of local state
+  const { user: authUser, requireAuth } = useAuth(); 
 
   const handleNavigate = (newView: 'home' | 'list', filters: any = {}) => {
       setActiveFilters(filters);
@@ -406,82 +406,80 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       }
   };
 
-  const handleAddCopy = async () => {
-      const currentUser = authUser || user;
-      
-      if (!currentUser) {
-          setShowLoginModal(true);
-          return;
-      }
-      
-      if (!detailData) return;
-      setAddingToMyKhutbahs(true);
-
-      try {
-          const userId = currentUser.id;
+  const handleAddCopy = () => {
+      requireAuth('Sign in to save this khutbah to your personal library.', async () => {
+          if (!detailData) return;
           
-          // 1. Create User Khutbah Copy
-          const { data: userKhutbah, error: headerError } = await supabase
-            .from('user_khutbahs')
-            .insert({
-                user_id: userId,
-                source_khutbah_id: detailData.id,
-                title: detailData.title,
-                author: detailData.author,
-                content: detailData.content || '', // Handle potentially null content
-            })
-            .select()
-            .single();
+          setAddingToMyKhutbahs(true);
+          const currentUser = authUser || user; // Should be set by requireAuth check
 
-          if (headerError) throw headerError;
+          try {
+              const userId = currentUser?.id;
+              if (!userId) throw new Error("User not authenticated");
+              
+              // 1. Create User Khutbah Copy
+              const { data: userKhutbah, error: headerError } = await supabase
+                .from('user_khutbahs')
+                .insert({
+                    user_id: userId,
+                    source_khutbah_id: detailData.id,
+                    title: detailData.title,
+                    author: detailData.author,
+                    content: detailData.content || '',
+                })
+                .select()
+                .single();
 
-          // 2. Fetch original cards
-          const { data: originalCards } = await supabase
-            .from('khutbah_cards')
-            .select('*')
-            .eq('khutbah_id', detailData.id)
-            .order('card_number');
+              if (headerError) throw headerError;
 
-          if (originalCards && originalCards.length > 0) {
-              // 3. Map to user cards
-              const userCards = originalCards.map(c => ({
-                  user_khutbah_id: userKhutbah.id,
-                  card_number: c.card_number,
-                  section_label: c.section_label,
-                  title: c.title,
-                  bullet_points: c.bullet_points,
-                  arabic_text: c.arabic_text,
-                  key_quote: c.key_quote,
-                  quote_source: c.quote_source,
-                  transition_text: c.transition_text,
-                  time_estimate_seconds: c.time_estimate_seconds,
-                  notes: c.notes
-              }));
+              // 2. Fetch original cards
+              const { data: originalCards } = await supabase
+                .from('khutbah_cards')
+                .select('*')
+                .eq('khutbah_id', detailData.id)
+                .order('card_number');
 
-              const { error: cardsError } = await supabase
-                .from('user_khutbah_cards')
-                .insert(userCards);
-                
-              if (cardsError) throw cardsError;
-          }
+              if (originalCards && originalCards.length > 0) {
+                  // 3. Map to user cards
+                  const userCards = originalCards.map(c => ({
+                      user_khutbah_id: userKhutbah.id,
+                      card_number: c.card_number,
+                      section_label: c.section_label,
+                      title: c.title,
+                      bullet_points: c.bullet_points,
+                      arabic_text: c.arabic_text,
+                      key_quote: c.key_quote,
+                      quote_source: c.quote_source,
+                      transition_text: c.transition_text,
+                      time_estimate_seconds: c.time_estimate_seconds,
+                      notes: c.notes
+                  }));
 
-          setIsInMyKhutbahs(true);
-          // If parent provided callback, call it (e.g. to navigate to editor)
-          if (onAddToMyKhutbahs) onAddToMyKhutbahs(userKhutbah.id);
+                  const { error: cardsError } = await supabase
+                    .from('user_khutbah_cards')
+                    .insert(userCards);
+                    
+                  if (cardsError) throw cardsError;
+              }
 
-      } catch (err: any) {
-          console.error("Error copying khutbah:", err);
-          const msg = err.message || JSON.stringify(err);
-          
-          if (msg.includes("duplicate key")) {
-              alert("This khutbah is already in your collection.");
               setIsInMyKhutbahs(true);
-          } else {
-              alert(`Failed to add to My Khutbahs: ${msg}`);
+              // If parent provided callback, call it (e.g. to navigate to editor)
+              if (onAddToMyKhutbahs) onAddToMyKhutbahs(userKhutbah.id);
+
+          } catch (err: any) {
+              console.error("Error copying khutbah:", err);
+              const msg = err.message || JSON.stringify(err);
+              
+              if (msg.includes("duplicate key")) {
+                  alert("This khutbah is already in your collection.");
+                  setIsInMyKhutbahs(true);
+              } else {
+                  alert(`Failed to add to My Khutbahs: ${msg}`);
+              }
+          } finally {
+              setAddingToMyKhutbahs(false);
           }
-      } finally {
-          setAddingToMyKhutbahs(false);
-      }
+      });
   };
 
   if (view === 'detail') {
@@ -489,12 +487,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       
       return (
         <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
-            <LoginModal 
-                isOpen={showLoginModal} 
-                onClose={() => setShowLoginModal(false)}
-                message="Sign in to save this khutbah to your personal library."
-            />
-            
             <div className="flex-1 overflow-y-auto">
             <div className="max-w-6xl mx-auto p-12">
                 <button onClick={() => setView('home')} className="mb-8 flex items-center text-gray-500 hover:text-emerald-600 gap-2 font-medium text-lg"><ChevronLeft size={24} /> Back to Library</button>

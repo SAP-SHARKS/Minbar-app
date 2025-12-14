@@ -123,6 +123,12 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
   // --- Search Khutbahs (Server-Side) ---
   useEffect(() => {
     if (!isSelecting) return;
+    
+    // Guard against null user
+    if (!user) {
+        setAvailableKhutbahs([]);
+        return;
+    }
 
     // Fetch from user_khutbahs for selection screen
     const fetchKhutbahs = async () => {

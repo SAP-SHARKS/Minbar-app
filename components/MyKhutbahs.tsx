@@ -17,10 +17,14 @@ export const MyKhutbahs: React.FC<MyKhutbahsProps> = ({ user, onEdit, onLive, on
   useEffect(() => {
     if (user) {
       fetchMyKhutbahs();
+    } else {
+        setLoading(false);
+        setMyKhutbahs([]);
     }
   }, [user]);
 
   const fetchMyKhutbahs = async () => {
+    if (!user) return; // Guard against null user
     setLoading(true);
     const { data } = await supabase
       .from('user_khutbahs')
@@ -72,7 +76,7 @@ export const MyKhutbahs: React.FC<MyKhutbahsProps> = ({ user, onEdit, onLive, on
             </div>
             <h3 className="text-xl font-bold text-gray-700 mb-2">No khutbahs found</h3>
             <p className="text-gray-500 mb-6 text-center max-w-md">
-              {searchQuery ? 'No results for your search.' : 'You haven\'t added any khutbahs to your collection yet. Browse the library to find one.'}
+              {searchQuery ? 'No results for your search.' : !user ? 'Please sign in to view your khutbahs.' : 'You haven\'t added any khutbahs to your collection yet. Browse the library to find one.'}
             </p>
             <button 
               onClick={onNavigateLibrary}

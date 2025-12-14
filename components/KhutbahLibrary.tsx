@@ -45,6 +45,47 @@ const getTopicIcon = (name: string) => {
     return <FileText size={20} />;
 };
 
+const topicColors: Record<string, { bg: string; icon: string }> = {
+  'Salah': { bg: 'bg-blue-50', icon: 'text-blue-500' },
+  'Zakat': { bg: 'bg-pink-50', icon: 'text-pink-500' },
+  'Fasting': { bg: 'bg-purple-50', icon: 'text-purple-500' },
+  'Hajj': { bg: 'bg-orange-50', icon: 'text-orange-500' },
+  'Quran': { bg: 'bg-emerald-50', icon: 'text-emerald-500' },
+  'Hadith': { bg: 'bg-teal-50', icon: 'text-teal-500' },
+  'Family': { bg: 'bg-rose-50', icon: 'text-rose-500' },
+  'Character': { bg: 'bg-indigo-50', icon: 'text-indigo-500' },
+  'Death & Afterlife': { bg: 'bg-slate-50', icon: 'text-slate-500' },
+  'Community': { bg: 'bg-cyan-50', icon: 'text-cyan-500' },
+  'Current Events': { bg: 'bg-amber-50', icon: 'text-amber-500' },
+  'Ramadan': { bg: 'bg-violet-50', icon: 'text-violet-500' },
+  'Anger': { bg: 'bg-red-50', icon: 'text-red-500' },
+  'Patience': { bg: 'bg-green-50', icon: 'text-green-500' },
+  'Love': { bg: 'bg-pink-50', icon: 'text-pink-500' },
+  'Hope': { bg: 'bg-yellow-50', icon: 'text-yellow-500' },
+};
+
+const defaultColor = { bg: 'bg-gray-50', icon: 'text-gray-500' };
+
+const avatarColors = [
+  'bg-blue-100 text-blue-600',
+  'bg-green-100 text-green-600',
+  'bg-purple-100 text-purple-600',
+  'bg-pink-100 text-pink-600',
+  'bg-orange-100 text-orange-600',
+  'bg-teal-100 text-teal-600',
+  'bg-indigo-100 text-indigo-600',
+  'bg-rose-100 text-rose-600',
+];
+
+const getAvatarColor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % avatarColors.length;
+  return avatarColors[index];
+};
+
 interface KhutbahCardProps {
   data: KhutbahPreview;
   onClick: () => void;
@@ -103,15 +144,18 @@ interface TopicCardProps {
   onClick: () => void;
 }
 
-const TopicCard: React.FC<TopicCardProps> = ({ name, count, onClick }) => (
-    <div onClick={onClick} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:border-emerald-200 hover:shadow-md cursor-pointer transition-all text-center group flex flex-col items-center justify-center h-32">
-        <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform group-hover:bg-emerald-100">
-            {getTopicIcon(name)}
+const TopicCard: React.FC<TopicCardProps> = ({ name, count, onClick }) => {
+    const colors = topicColors[name] || defaultColor;
+    return (
+        <div onClick={onClick} className={`bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:border-emerald-200 hover:shadow-md cursor-pointer transition-all text-center group flex flex-col items-center justify-center h-32`}>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform ${colors.bg} ${colors.icon}`}>
+                {getTopicIcon(name)}
+            </div>
+            <h4 className="font-bold text-gray-800 text-sm mb-1 line-clamp-1">{name}</h4>
+            {count !== undefined && <span className="text-[10px] text-gray-400 font-medium">{count} Khutbahs</span>}
         </div>
-        <h4 className="font-bold text-gray-800 text-sm mb-1 line-clamp-1">{name}</h4>
-        {count !== undefined && <span className="text-[10px] text-gray-400 font-medium">{count} Khutbahs</span>}
-    </div>
-);
+    );
+};
 
 interface ImamCardProps {
   name: string;
@@ -122,11 +166,11 @@ interface ImamCardProps {
 
 const ImamCard: React.FC<ImamCardProps> = ({ name, count, avatar_url, onClick }) => (
     <div onClick={onClick} className="flex-shrink-0 w-40 bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all group mr-4">
-        <div className="w-20 h-20 bg-gray-100 rounded-full mx-auto mb-3 overflow-hidden border-2 border-transparent group-hover:border-emerald-200 transition-colors">
+        <div className={`w-20 h-20 rounded-full mx-auto mb-3 overflow-hidden border-2 border-transparent group-hover:border-emerald-200 transition-colors ${!avatar_url ? getAvatarColor(name) : 'bg-gray-100'}`}>
             {avatar_url ? (
                 <img src={avatar_url} alt={name} className="w-full h-full object-cover" />
             ) : (
-                <div className="w-full h-full flex items-center justify-center text-2xl font-bold text-gray-400 bg-gray-100">
+                <div className="w-full h-full flex items-center justify-center text-2xl font-bold">
                     {name.charAt(0)}
                 </div>
             )}

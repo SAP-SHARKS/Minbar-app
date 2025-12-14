@@ -98,6 +98,9 @@ export default function App() {
                 setLiveKhutbahId(id);
                 setActiveTab('live');
             }}
+            onSaveNew={(id) => {
+              setEditorKhutbahId(id);
+            }}
           />
         )}
         
