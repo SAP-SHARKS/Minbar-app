@@ -14,7 +14,7 @@ interface LiveMinbarProps {
 
 interface KhutbahCard {
   id: string;
-  user_khutbah_id: string;
+  user_khutbah_id?: string;
   card_number: number;
   section_label: string;
   title: string;
