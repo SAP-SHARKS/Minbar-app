@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
   FileSpreadsheet, FileText, CheckCircle, AlertCircle, 
   Loader2, ChevronRight, UploadCloud, X, File,
-  Check, AlertTriangle
+  Check, AlertTriangle, Sparkles, Play
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import * as XLSX from 'xlsx';
@@ -10,6 +10,166 @@ import * as XLSX from 'xlsx';
 interface KhutbahUploadProps {
   onSuccess: () => void;
 }
+
+// --- Process Section (AI Batch) ---
+const ProcessSection = () => {
+  const [processing, setProcessing] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0, currentTitle: '' });
+  const [results, setResults] = useState<any[]>([]);
+
+  // Check if content already has HTML formatting
+  const isAlreadyFormatted = (content: string) => {
+    if (!content) return false;
+    return content.includes('<h1>') || content.includes('<h2>') || content.includes('<blockquote');
+  };
+
+  const processAll = async () => {
+    setProcessing(true);
+    setResults([]);
+    
+    // Get all khutbahs
+    const { data: allKhutbahs } = await supabase
+      .from('khutbahs')
+      .select('id, title, content');
+    
+    if (!allKhutbahs) {
+        setProcessing(false);
+        return;
+    }
+
+    // Filter out already formatted ones
+    const khutbahs = allKhutbahs.filter(k => !isAlreadyFormatted(k.content));
+    const skipped = allKhutbahs.length - khutbahs.length;
+    
+    if (skipped > 0) {
+      setResults([{ title: `Skipped ${skipped} already formatted khutbahs`, success: true, skipped: true }]);
+    }
+    
+    setProgress({ current: 0, total: khutbahs.length, currentTitle: '' });
+    
+    for (let i = 0; i < khutbahs.length; i++) {
+      const khutbah = khutbahs[i];
+      setProgress({ current: i + 1, total: khutbahs.length, currentTitle: khutbah.title });
+      
+      try {
+        // Step 1: Format HTML
+        const formatRes = await fetch('/api/process-khutbah', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: khutbah.content, type: 'format' })
+        });
+        const formatData = await formatRes.json();
+        const html = formatData.result;
+        
+        if (!formatRes.ok) throw new Error(formatData.error || 'Format failed');
+
+        // Update khutbah content with formatted HTML
+        await supabase.from('khutbahs').update({ content: html, extracted_text: html }).eq('id', khutbah.id);
+        
+        // Step 2: Generate cards
+        const cardsRes = await fetch('/api/process-khutbah', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: html, type: 'cards' })
+        });
+        const cardsData = await cardsRes.json();
+        
+        if (!cardsRes.ok) throw new Error(cardsData.error || 'Cards failed');
+
+        let cardsJsonString = cardsData.result;
+        // Clean markdown if present
+        cardsJsonString = cardsJsonString.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const cards = JSON.parse(cardsJsonString);
+        
+        // Delete existing cards for this khutbah
+        await supabase.from('khutbah_cards').delete().eq('khutbah_id', khutbah.id);
+        
+        // Insert new cards with khutbah_id
+        const cardsWithId = cards.map((card: any) => ({ ...card, khutbah_id: khutbah.id }));
+        await supabase.from('khutbah_cards').insert(cardsWithId);
+        
+        setResults(prev => [...prev, { title: khutbah.title, success: true, cards: cards.length }]);
+        
+        // 2 second delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 2000));
+        
+      } catch (error: any) {
+        setResults(prev => [...prev, { title: khutbah.title, success: false, error: error.message }]);
+      }
+    }
+    
+    setProcessing(false);
+  };
+
+  return (
+    <div className="mt-12 pt-10 border-t border-gray-200">
+       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+           <div>
+               <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                   <Sparkles className="text-purple-600" size={24}/> 
+                   Process Existing Khutbahs
+               </h3>
+               <p className="text-gray-500 mt-1">
+                   Use AI to format HTML content and generate summary cards for khutbahs already in the database.
+               </p>
+           </div>
+           
+           {!processing && (
+               <button
+                   onClick={processAll}
+                   className="mt-4 md:mt-0 bg-purple-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-lg shadow-purple-200 flex items-center gap-2"
+               >
+                   <Play size={18} fill="currentColor" /> Process All
+               </button>
+           )}
+       </div>
+
+       {/* Progress Display */}
+       {processing && (
+           <div className="bg-purple-50 rounded-xl p-6 border border-purple-100 mb-6">
+               <div className="flex items-center gap-4 mb-2">
+                   <Loader2 size={24} className="animate-spin text-purple-600"/>
+                   <div>
+                       <h4 className="font-bold text-purple-900">Processing Khutbahs...</h4>
+                       <p className="text-sm text-purple-700">
+                           {progress.current} of {progress.total} • Current: <strong>{progress.currentTitle}</strong>
+                       </p>
+                   </div>
+               </div>
+               {/* Progress Bar */}
+               <div className="w-full bg-purple-200 rounded-full h-2.5 mt-2">
+                   <div 
+                       className="bg-purple-600 h-2.5 rounded-full transition-all duration-300" 
+                       style={{ width: `${(progress.current / Math.max(progress.total, 1)) * 100}%` }}
+                   ></div>
+               </div>
+           </div>
+       )}
+
+       {/* Results Log */}
+       {results.length > 0 && (
+           <div className="bg-gray-50 rounded-2xl border border-gray-200 p-6 max-h-[300px] overflow-y-auto custom-scrollbar">
+               <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Processing Log</h4>
+               <div className="space-y-2">
+                   {results.map((r, i) => (
+                       <div key={i} className={`p-3 rounded-lg border text-sm flex justify-between items-center ${r.skipped ? 'bg-blue-50 text-blue-800 border-blue-100' : r.success ? 'bg-green-50 text-green-800 border-green-100' : 'bg-red-50 text-red-800 border-red-100'}`}>
+                           <div className="flex items-center gap-2">
+                               {r.skipped ? <span>⏭️</span> : r.success ? <CheckCircle size={14}/> : <X size={14}/>} 
+                               <span className="font-medium">{r.title}</span>
+                           </div>
+                           <div>
+                               {r.success && !r.skipped && <span className="bg-white/50 px-2 py-0.5 rounded text-xs border border-green-200">{r.cards} cards</span>}
+                               {r.skipped && <span className="text-xs opacity-70">Already formatted</span>}
+                               {!r.success && !r.skipped && <span className="text-xs font-bold">{r.error}</span>}
+                           </div>
+                       </div>
+                   ))}
+               </div>
+           </div>
+       )}
+    </div>
+  );
+};
 
 // --- Excel Import Section ---
 const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
@@ -551,6 +711,9 @@ export const KhutbahUpload: React.FC<KhutbahUploadProps> = ({ onSuccess }) => {
             <div className="bg-white rounded-[2rem] border border-gray-200 shadow-sm overflow-hidden min-h-[600px]">
                 {mode === 'excel' ? <ExcelImportSection onSuccess={onSuccess} /> : <PdfUploadSection />}
             </div>
+
+            {/* New Process Existing Section */}
+            <ProcessSection />
          </div>
       </div>
     </div>

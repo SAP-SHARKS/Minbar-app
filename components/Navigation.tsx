@@ -24,7 +24,6 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab,
     { id: 'practice', icon: Mic, label: 'Coach', color: 'orange' },
     { id: 'learn', icon: GraduationCap, label: 'Academy', color: 'teal' },
     { id: 'profile', icon: User, label: 'Profile', color: 'teal' },
-    { id: 'process', icon: Sparkles, label: 'AI Batch', color: 'gray' }, // New Process Link
   ];
 
   return (
@@ -48,7 +47,6 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab,
                case 'orange': activeClasses = "bg-orange-50 text-orange-600 border-orange-200 shadow-sm"; break;
                case 'teal': activeClasses = "bg-teal-50 text-teal-600 border-teal-200 shadow-sm"; break;
                case 'cyan': activeClasses = "bg-cyan-50 text-cyan-600 border-cyan-200 shadow-sm"; break;
-               case 'gray': activeClasses = "bg-gray-100 text-gray-700 border-gray-200 shadow-sm"; break;
                default: activeClasses = "bg-gray-900 text-white";
              }
           } else {

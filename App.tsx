@@ -16,7 +16,6 @@ import { MyKhutbahs } from './components/MyKhutbahs';
 import { UserMenu } from './components/UserMenu';
 import { useAuth } from './contexts/AuthContext';
 import { LoginModal } from './components/LoginModal';
-import { ProcessKhutbahs } from './components/ProcessKhutbahs';
 
 export default function App() {
   const { user, isLoading } = useAuth();
@@ -123,7 +122,6 @@ export default function App() {
         {activeTab === 'profile' && <ProfileManager user={user} />}
         {activeTab === 'finder' && <KhateebFinder onNavigateProfile={() => setActiveTab('profile')} />}
         {activeTab === 'upload' && <KhutbahUpload onSuccess={() => setActiveTab('dashboard')} />}
-        {activeTab === 'process' && <ProcessKhutbahs />}
       </main>
     </div>
   );
