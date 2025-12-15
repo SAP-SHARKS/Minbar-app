@@ -3,7 +3,7 @@ import {
   Search, Play, FileText, ChevronLeft, Check, 
   MapPin, Star, Heart, MessageCircle, Send, Loader2, AlertCircle,
   Minus, Plus, Type, ChevronRight, TrendingUp, Grid, User,
-  BookOpen, Moon, Sun, Users, Activity, Bookmark
+  BookOpen, Moon, Sun, Users, Activity, Bookmark, LayoutList, Sparkles
 } from 'lucide-react';
 import { AUTHORS_DATA } from '../constants';
 import { Khutbah, KhutbahPreview, AuthorData } from '../types';
@@ -32,6 +32,19 @@ const getTagStyles = (tag: string) => {
   let hash = 0;
   for (let i = 0; i < tag.length; i++) hash = tag.charCodeAt(i) + ((hash << 5) - hash);
   return styles[Math.abs(hash) % styles.length];
+};
+
+const getSectionColor = (label: string) => {
+    const colors: Record<string, string> = {
+      INTRO: 'bg-blue-100 text-blue-700 border-blue-200',
+      MAIN: 'bg-gray-100 text-gray-700 border-gray-200',
+      HADITH: 'bg-green-100 text-green-700 border-green-200',
+      QURAN: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      STORY: 'bg-purple-100 text-purple-700 border-purple-200',
+      PRACTICAL: 'bg-orange-100 text-orange-700 border-orange-200',
+      CLOSING: 'bg-rose-100 text-rose-700 border-rose-200',
+    };
+    return colors[label] || 'bg-gray-100 text-gray-700 border-gray-200';
 };
 
 const getTopicIcon = (name: string) => {
@@ -181,29 +194,6 @@ const ImamCard: React.FC<ImamCardProps> = ({ name, count, avatar_url, onClick })
         </div>
     </div>
 );
-
-const SafeHtmlRenderer = ({ html, fontSize = 18 }: { html: string | undefined | null, fontSize?: number }) => {
-  if (!html || html.trim() === '') {
-    return null;
-  }
-  
-  try {
-    return (
-      <div 
-        className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed"
-        style={{ fontSize: `${fontSize}px` }}
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    );
-  } catch (error) {
-    console.error('Error rendering HTML:', error);
-    return (
-      <div className="text-gray-500">
-        Unable to display content. Please try again.
-      </div>
-    );
-  }
-};
 
 const HomeView = ({ 
     onNavigate, 
@@ -392,6 +382,10 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const [contentFontSize, setContentFontSize] = useState(18);
   const [isInMyKhutbahs, setIsInMyKhutbahs] = useState(false);
   const [addingToMyKhutbahs, setAddingToMyKhutbahs] = useState(false);
+  const [khutbahCards, setKhutbahCards] = useState<any[]>([]);
+  
+  // AI Processing State
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // Use requireAuth from AuthContext instead of local state
   const { user: authUser, requireAuth } = useAuth(); 
@@ -406,6 +400,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       setView('detail');
       setDetailLoading(true);
       setIsInMyKhutbahs(false);
+      setKhutbahCards([]);
       
       try {
           // Fetch public detail
@@ -423,12 +418,23 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   topic: data.topic,
                   labels: data.tags,
                   likes: data.likes_count,
-                  content: data.extracted_text, 
+                  content: data.extracted_text || data.content, // Use extracted text or content
                   style: data.topic,
                   date: data.created_at ? new Date(data.created_at).toLocaleDateString() : undefined,
                   file_url: data.file_url,
                   comments: [] 
               });
+
+              // Fetch Cards
+              const { data: cardsData } = await supabase
+                  .from('khutbah_cards')
+                  .select('*')
+                  .eq('khutbah_id', data.id)
+                  .order('card_number', { ascending: true });
+
+              if (cardsData) {
+                  setKhutbahCards(cardsData);
+              }
 
               // Check if in my khutbahs using maybeSingle to avoid errors if not found
               const currentUser = authUser || user;
@@ -448,6 +454,84 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       } finally {
           setDetailLoading(false);
       }
+  };
+
+  const handleProcessAI = async () => {
+    if (!detailData || !detailData.id) return;
+    
+    setIsProcessing(true);
+    try {
+        // 1. Get raw text (fallback to content if no extracted_text)
+        const rawText = detailData.content || ''; 
+        if (!rawText) throw new Error("No content to process");
+
+        // 2. Format HTML
+        const resFormat = await fetch('/api/process-khutbah', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ content: rawText, type: 'format' })
+        });
+        
+        if (!resFormat.ok) throw new Error('API Format Error');
+        const dataFormat = await resFormat.json();
+        const html = dataFormat.result;
+
+        // 3. Generate Cards
+        const resCards = await fetch('/api/process-khutbah', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ content: html, type: 'cards' })
+        });
+        
+        if (!resCards.ok) throw new Error('API Cards Error');
+        const dataCards = await resCards.json();
+        
+        let cardsJson = [];
+        try {
+            // Clean markdown if present
+            const cleanJson = dataCards.result.replace(/```json/g, '').replace(/```/g, '').trim();
+            cardsJson = JSON.parse(cleanJson);
+        } catch (e) {
+            console.warn("JSON Parse Error, attempting raw", e);
+            cardsJson = JSON.parse(dataCards.result);
+        }
+
+        // 4. Update Database
+        const { error: updateError } = await supabase
+            .from('khutbahs')
+            .update({ content: html, extracted_text: html }) 
+            .eq('id', detailData.id);
+        
+        if (updateError) throw updateError;
+
+        // 5. Update Cards (Delete old, insert new)
+        await supabase.from('khutbah_cards').delete().eq('khutbah_id', detailData.id);
+        
+        const cardsPayload = cardsJson.map((c: any) => ({
+            khutbah_id: detailData.id,
+            card_number: c.card_number,
+            section_label: c.section_label || 'MAIN',
+            title: c.title || 'Section',
+            bullet_points: c.bullet_points || [],
+            arabic_text: c.arabic_text || '',
+            key_quote: c.key_quote || '',
+            quote_source: c.quote_source || '',
+            time_estimate_seconds: c.time_estimate_seconds || 60
+        }));
+        
+        const { error: insertError } = await supabase.from('khutbah_cards').insert(cardsPayload);
+        if (insertError) throw insertError;
+
+        // 6. Refresh
+        handleSelectKhutbah({ id: detailData.id } as any);
+        alert('Khutbah processed successfully!');
+
+    } catch (err: any) {
+        console.error("AI Processing Failed:", err);
+        alert("Processing failed: " + err.message);
+    } finally {
+        setIsProcessing(false);
+    }
   };
 
   const handleAddCopy = () => {
@@ -532,7 +616,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       return (
         <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
             <div className="flex-1 overflow-y-auto">
-            <div className="max-w-6xl mx-auto p-12">
+            <div className="max-w-[2000px] mx-auto p-8 xl:p-12">
                 <button onClick={() => setView('home')} className="mb-8 flex items-center text-gray-500 hover:text-emerald-600 gap-2 font-medium text-lg"><ChevronLeft size={24} /> Back to Library</button>
                 <div className="flex justify-between items-start mb-10">
                 <div>
@@ -552,6 +636,16 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                         <button onClick={() => setContentFontSize(s => Math.min(48, s+2))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><Plus size={16} /></button>
                     </div>
                     
+                    {/* Process with AI Button */}
+                    <button 
+                        onClick={handleProcessAI}
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-6 py-3 rounded-full hover:opacity-90 transition-all shadow-lg shadow-violet-200 font-bold disabled:opacity-50"
+                    >
+                        {isProcessing ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
+                        {isProcessing ? 'Processing...' : 'Process with AI'}
+                    </button>
+
                     {/* Add to My Khutbahs Logic */}
                     {isInMyKhutbahs ? (
                         <button 
@@ -577,14 +671,58 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                 </div>
                 </div>
                 
-                <div className="bg-white rounded-lg p-8 max-w-4xl mx-auto">
-                {detailData.content && detailData.content.trim() !== '' ? (
-                    <SafeHtmlRenderer html={detailData.content} fontSize={contentFontSize} />
-                ) : detailData.file_url ? (
-                    <iframe src={`https://docs.google.com/viewer?url=${encodeURIComponent(detailData.file_url)}&embedded=true`} className="w-full h-[80vh] rounded-lg border border-gray-200" title={detailData.title} />
-                ) : (
-                    <div className="bg-gray-50 p-8 rounded-lg text-center text-gray-500">No content available for this khutbah.</div>
-                )}
+                <div className="flex flex-col lg:flex-row gap-8">
+                    {/* Main Content (Left/Center) */}
+                    <div className="flex-1">
+                        <div className="bg-white rounded-lg p-8 shadow-sm border border-gray-100">
+                            <div 
+                                className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed"
+                                style={{ fontSize: `${contentFontSize}px` }}
+                                dangerouslySetInnerHTML={{ __html: detailData.content || '' }}
+                            />
+                            
+                            {(!detailData.content || detailData.content.trim() === '') && (
+                                <div className="bg-gray-50 p-8 rounded-lg text-center text-gray-500">No text content available for this khutbah.</div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Sidebar (Right) - Only if cards exist */}
+                    {khutbahCards.length > 0 && (
+                        <div className="w-full lg:w-96 shrink-0">
+                            <h3 className="font-bold text-gray-900 mb-4 text-lg flex items-center gap-2">
+                                <LayoutList size={20} className="text-emerald-600" /> Summary Cards
+                            </h3>
+                            <div className="space-y-4 sticky top-8">
+                                {khutbahCards.map(card => (
+                                    <div key={card.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-emerald-200 transition-colors shadow-sm">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider border ${getSectionColor(card.section_label)}`}>
+                                                {card.section_label}
+                                            </span>
+                                            <span className="text-xs font-bold text-gray-300">#{card.card_number}</span>
+                                        </div>
+                                        <h4 className="font-bold text-gray-900 mb-3 text-lg leading-tight">{card.title}</h4>
+                                        {card.bullet_points && card.bullet_points.length > 0 && (
+                                            <ul className="space-y-2">
+                                                {card.bullet_points.map((pt: string, i: number) => (
+                                                    <li key={i} className="flex gap-2 items-start text-sm text-gray-600 leading-snug">
+                                                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+                                                        {pt}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+                                        {card.arabic_text && (
+                                            <div className="mt-4 pt-3 border-t border-gray-50 text-right">
+                                                <p className="font-serif text-lg text-gray-800 leading-relaxed" dir="rtl">{card.arabic_text}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
             </div>

@@ -1,81 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import React, { useState } from 'react';
 import { X } from 'lucide-react';
 
-import { Navigation } from './components/Navigation';
-import { LiveMinbar } from './components/LiveMinbar';
-import { KhutbahLibrary } from './components/KhutbahLibrary';
-import { Scheduler } from './components/Scheduler';
-import { KhutbahEditor } from './components/KhutbahEditor';
-import { PracticeCoach } from './components/PracticeCoach';
-import { MessageCenter } from './components/MessageCenter';
-import { KhateebFinder } from './components/KhateebFinder';
-import { ProfileManager } from './components/ProfileManager';
-import { LearningSection } from './components/LearningSection';
-import { KhutbahUpload } from './components/KhutbahUpload';
-
-// Safe Firebase Initialization
-const initFirebase = () => {
-  try {
-    const firebaseConfigStr = (window as any).__firebase_config;
-    if (!firebaseConfigStr) {
-      console.warn("No firebase config found. Running in offline/demo mode.");
-      return null;
-    }
-    const firebaseConfig = JSON.parse(firebaseConfigStr);
-    return !getApps().length ? initializeApp(firebaseConfig) : getApp();
-  } catch (error) {
-    console.warn("Firebase initialization failed:", error);
-    return null;
-  }
-};
-
-const app = initFirebase();
-const auth = app ? getAuth(app) : null;
+import { Navigation } from '../components/Navigation';
+import { LiveMinbar } from '../components/LiveMinbar';
+import { KhutbahLibrary } from '../components/KhutbahLibrary';
+import { Scheduler } from '../components/Scheduler';
+import { KhutbahEditor } from '../components/KhutbahEditor';
+import { PracticeCoach } from '../components/PracticeCoach';
+import { MessageCenter } from '../components/MessageCenter';
+import { KhateebFinder } from '../components/KhateebFinder';
+import { ProfileManager } from '../components/ProfileManager';
+import { LearningSection } from '../components/LearningSection';
+import { KhutbahUpload } from '../components/KhutbahUpload';
+import { MyKhutbahs } from '../components/MyKhutbahs';
+import { UserMenu } from '../components/UserMenu';
+import { useAuth } from '../contexts/AuthContext';
+import { LoginModal } from '../components/LoginModal';
+import { ProcessKhutbahs } from '../components/ProcessKhutbahs';
 
 export default function App() {
-  const [user, setUser] = useState<FirebaseUser | { uid: string, isAnonymous: boolean } | null>(null);
+  const { user, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [loading, setLoading] = useState(true);
+  
+  // Navigation State
+  const [liveKhutbahId, setLiveKhutbahId] = useState<string | null>(null);
+  const [editorKhutbahId, setEditorKhutbahId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const initAuth = async () => {
-      if (!auth) {
-        // Fallback for demo mode without firebase
-        setUser({ uid: 'demo-user', isAnonymous: true });
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const token = (window as any).__initial_auth_token;
-        if (token) {
-          await signInWithCustomToken(auth, token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) {
-        console.error("Auth failed:", error);
-        // Fallback
-        setUser({ uid: 'demo-user', isAnonymous: true });
-      }
-    };
-
-    initAuth();
-
-    if (auth) {
-      const unsub = onAuthStateChanged(auth, (u) => {
-        setUser(u);
-        setLoading(false);
-      });
-      return () => unsub();
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  if (loading) return (
+  if (isLoading) return (
     <div className="h-screen flex items-center justify-center bg-gray-50 flex-col gap-4">
       <div className="w-12 h-12 bg-emerald-600 rounded-xl animate-pulse"></div>
       <div className="text-emerald-800 font-bold tracking-wider">LOADING MINBAR</div>
@@ -84,6 +35,9 @@ export default function App() {
 
   return (
     <div className="font-sans antialiased text-gray-900 h-screen overflow-hidden flex bg-gray-50">
+      {/* Global Modal */}
+      <LoginModal />
+
       <Navigation activeTab={activeTab} setActiveTab={setActiveTab} unreadCount={2} />
 
       {activeTab !== 'live' && (
@@ -98,30 +52,78 @@ export default function App() {
               <X size={14} /> Dismiss
             </button>
 
-            <button
-              onClick={() => setActiveTab('profile')}
-              className="bg-gray-800 p-1 rounded-full border border-gray-700 hover:bg-gray-700 transition-all group"
-              title="My Profile"
-            >
-              <div className="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-inner group-hover:scale-105 transition-transform">
-                S
-              </div>
-            </button>
+            <UserMenu />
           </div>
         </div>
       )}
 
       <main className={`flex-1 h-full ${activeTab !== 'live' ? 'pt-16' : ''}`}>
-        {activeTab === 'dashboard' && <KhutbahLibrary user={user} showHero={true} onStartLive={() => setActiveTab('live')} />}
+        {activeTab === 'dashboard' && (
+          <KhutbahLibrary 
+            user={user} 
+            showHero={true}
+            onStartLive={(id) => {
+              // Usually from Library we view details, then add to My Khutbahs
+              // But if we want to support direct live (read only), we could
+              // For now, let's keep Library navigation internal
+            }} 
+            onAddToMyKhutbahs={(id) => {
+               setEditorKhutbahId(id);
+               setActiveTab('editor');
+            }}
+          />
+        )}
+        
+        {activeTab === 'my-khutbahs' && (
+          <MyKhutbahs 
+            user={user}
+            onEdit={(id) => {
+              setEditorKhutbahId(id);
+              setActiveTab('editor');
+            }}
+            onLive={(id) => {
+              setLiveKhutbahId(id);
+              setActiveTab('live');
+            }}
+            onNavigateLibrary={() => setActiveTab('dashboard')}
+          />
+        )}
+
         {activeTab === 'calendar' && <Scheduler user={user} />}
-        {activeTab === 'editor' && <KhutbahEditor user={user} />}
+        
+        {activeTab === 'editor' && (
+          <KhutbahEditor 
+            user={user} 
+            khutbahId={editorKhutbahId} 
+            onGoLive={(id) => {
+                setLiveKhutbahId(id);
+                setActiveTab('live');
+            }}
+            onSaveNew={(id) => {
+              setEditorKhutbahId(id);
+            }}
+          />
+        )}
+        
         {activeTab === 'practice' && <PracticeCoach user={user} />}
         {activeTab === 'learn' && <LearningSection user={user} />}
-        {activeTab === 'live' && <LiveMinbar user={user} onExit={() => setActiveTab('dashboard')} />}
+        
+        {activeTab === 'live' && (
+          <LiveMinbar 
+            user={user} 
+            khutbahId={liveKhutbahId}
+            onExit={() => {
+              setActiveTab('my-khutbahs');
+              setLiveKhutbahId(null);
+            }} 
+          />
+        )}
+        
         {activeTab === 'messages' && <MessageCenter />}
         {activeTab === 'profile' && <ProfileManager user={user} />}
         {activeTab === 'finder' && <KhateebFinder onNavigateProfile={() => setActiveTab('profile')} />}
         {activeTab === 'upload' && <KhutbahUpload onSuccess={() => setActiveTab('dashboard')} />}
+        {activeTab === 'process' && <ProcessKhutbahs />}
       </main>
     </div>
   );

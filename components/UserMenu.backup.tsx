@@ -1,12 +1,12 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, User as UserIcon, BookHeart } from 'lucide-react';
+import { LogOut, User as UserIcon } from 'lucide-react';
 import { LoginModal } from './LoginModal';
 
 export function UserMenu() {
-  const { user, isLoading, signOut } = useAuth();
+  const { user, isLoading, signOut, setShowLoginModal } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside
@@ -33,10 +33,7 @@ export function UserMenu() {
         >
           Sign In
         </button>
-        <LoginModal 
-            isOpen={showLoginModal} 
-            onClose={() => setShowLoginModal(false)} 
-        />
+        <LoginModal />
       </>
     );
   }

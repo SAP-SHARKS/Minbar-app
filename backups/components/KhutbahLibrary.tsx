@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Search, Play, FileText, ChevronLeft, Check, 
@@ -19,7 +20,8 @@ interface KhutbahLibraryProps {
   onAddToMyKhutbahs?: (id: string) => void;
 }
 
-// ... existing utility functions ...
+// --- Utility Components ---
+
 const getTagStyles = (tag: string) => {
   const styles = [
     'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -348,8 +350,9 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const [contentFontSize, setContentFontSize] = useState(18);
   const [isInMyKhutbahs, setIsInMyKhutbahs] = useState(false);
   const [addingToMyKhutbahs, setAddingToMyKhutbahs] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const { user: authUser } = useAuth(); // Use direct auth for actions
+  
+  // Use direct auth for actions
+  const { user: authUser, setShowLoginModal, setLoginMessage } = useAuth(); 
 
   const handleNavigate = (newView: 'home' | 'list', filters: any = {}) => {
       setActiveFilters(filters);
@@ -409,6 +412,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       const currentUser = authUser || user;
       
       if (!currentUser) {
+          setLoginMessage("Sign in to save this khutbah to your personal library.");
           setShowLoginModal(true);
           return;
       }
@@ -488,12 +492,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       
       return (
         <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
-            <LoginModal 
-                isOpen={showLoginModal} 
-                onClose={() => setShowLoginModal(false)}
-                message="Sign in to save this khutbah to your personal library."
-            />
-            
+             {/* Using Global Login Modal from App root controlled by context */}
             <div className="flex-1 overflow-y-auto">
             <div className="max-w-6xl mx-auto p-12">
                 <button onClick={() => setView('home')} className="mb-8 flex items-center text-gray-500 hover:text-emerald-600 gap-2 font-medium text-lg"><ChevronLeft size={24} /> Back to Library</button>

@@ -117,24 +117,34 @@
         font-size: 1.1em;
         margin-bottom: 2rem;
       }
+      
+      /* Editor Placeholder */
+      [contenteditable]:empty:before {
+        content: attr(placeholder);
+        color: #9ca3af;
+        cursor: text;
+        display: block; /* For Firefox */
+      }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.557.0",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "@chatscope/chat-ui-kit-react": "https://esm.sh/@chatscope/chat-ui-kit-react@^2.1.1",
+    "react": "https://esm.sh/react@18.2.0",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "lucide-react": "https://esm.sh/lucide-react@0.263.1?deps=react@18.2.0,react-dom@18.2.0",
+    "firebase/": "https://esm.sh/firebase@10.8.0/",
+    "@chatscope/chat-ui-kit-react": "https://esm.sh/@chatscope/chat-ui-kit-react@1.8.3?deps=react@18.2.0,react-dom@18.2.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3",
     "pdfjs-dist": "https://esm.sh/pdfjs-dist@3.11.174",
     "pdfjs-dist/": "https://esm.sh/pdfjs-dist@3.11.174/",
-    "react-pdf": "https://esm.sh/react-pdf@7.7.1?deps=react@19.2.1,react-dom@19.2.1,pdfjs-dist@3.11.174",
+    "react-pdf": "https://esm.sh/react-pdf@7.7.1?deps=react@18.2.0,react-dom@18.2.0,pdfjs-dist@3.11.174",
     "react-pdf/dist/esm/Page/AnnotationLayer.css": "https://esm.sh/react-pdf@7.7.1/dist/esm/Page/AnnotationLayer.css?css",
     "react-pdf/dist/esm/Page/TextLayer.css": "https://esm.sh/react-pdf@7.7.1/dist/esm/Page/TextLayer.css?css",
+    "xlsx": "https://esm.sh/xlsx@0.18.5",
     "react-pdf/": "https://esm.sh/react-pdf@^10.2.0/",
-    "xlsx": "https://esm.sh/xlsx@0.18.5"
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0"
   }
 }
 </script>

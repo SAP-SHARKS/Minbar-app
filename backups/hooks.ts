@@ -1,5 +1,6 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from './supabaseClient';
+import { supabase } from '../supabaseClient';
 import { KhutbahPreview, Topic, Imam } from './types';
 
 export function useHomepageData() {
@@ -7,6 +8,7 @@ export function useHomepageData() {
     latest: KhutbahPreview[];
     trending: KhutbahPreview[];
     featured: KhutbahPreview[];
+    classics: KhutbahPreview[];
     topics: Topic[];
     imams: Imam[];
   } | null>(null);
@@ -16,18 +18,24 @@ export function useHomepageData() {
     const fetchData = async () => {
       try {
         // We use Promise.all to fetch data in parallel
-        const [latest, trending, topics, imams] = await Promise.all([
+        const [latest, trending, classics, topics, imams] = await Promise.all([
           // Latest
           supabase
             .from('khutbahs')
-            .select('id, title, author, topic, tags, likes_count, created_at')
+            .select('id, title, author, topic, tags, likes_count, created_at, rating')
             .order('created_at', { ascending: false })
             .limit(6),
           // Trending (Most Liked)
           supabase
             .from('khutbahs')
-            .select('id, title, author, topic, tags, likes_count, created_at')
+            .select('id, title, author, topic, tags, likes_count, created_at, rating')
             .order('likes_count', { ascending: false })
+            .limit(6),
+          // Classics
+          supabase
+            .from('khutbahs')
+            .select('id, title, author, topic, tags, likes_count, created_at, rating')
+            .gt('likes_count', 10)
             .limit(6),
           // Topics (If table doesn't exist, we might get error, handled in catch)
           supabase
@@ -51,12 +59,14 @@ export function useHomepageData() {
             topic: item.topic,
             labels: item.tags,
             likes: item.likes_count,
-            published_at: item.created_at
+            published_at: item.created_at,
+            rating: item.rating
         });
 
         setData({
           latest: (latest.data || []).map(mapKhutbah),
           trending: (trending.data || []).map(mapKhutbah),
+          classics: (classics.data || []).map(mapKhutbah),
           featured: (trending.data || []).slice(0, 3).map(mapKhutbah), // reuse trending as featured for now
           topics: (topics.data || []),
           imams: (imams.data || []),
@@ -88,7 +98,7 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
 
     let query = supabase
       .from('khutbahs')
-      .select('id, title, author, topic, tags, likes_count, created_at', { count: 'exact' });
+      .select('id, title, author, topic, tags, likes_count, created_at, rating', { count: 'exact' });
 
     // Filters
     if (filters.search) {
@@ -119,7 +129,8 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
             topic: item.topic,
             labels: item.tags,
             likes: item.likes_count,
-            published_at: item.created_at
+            published_at: item.created_at,
+            rating: item.rating
         }));
 
         setData(prev => reset ? mappedResults : [...prev, ...mappedResults]);

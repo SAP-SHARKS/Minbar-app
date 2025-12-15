@@ -1,3 +1,4 @@
+
 export interface Comment {
   user: string;
   text: string;
@@ -14,6 +15,7 @@ export interface KhutbahPreview {
   published_at?: string;
   likes: number;
   comments_count?: number;
+  rating?: number;
 }
 
 export interface Khutbah {
@@ -29,6 +31,7 @@ export interface Khutbah {
   comments?: Comment[];
   file_url?: string;
   view_count?: number;
+  rating?: number;
 }
 
 export interface Topic {

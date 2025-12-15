@@ -3,7 +3,7 @@ import {
   LayoutDashboard, FileText, Mic, Calendar as CalendarIcon, 
   MessageSquare, User, LogOut, Play, GraduationCap, UploadCloud, Book, Sparkles
 } from 'lucide-react';
-import { KhateebIcon } from './Icons';
+import { KhateebIcon } from '../components/Icons';
 
 interface NavigationProps {
   activeTab: string;
