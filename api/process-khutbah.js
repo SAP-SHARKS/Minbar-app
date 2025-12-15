@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,13 +14,14 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server configuration error: Missing API Key' });
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const genAI = new GoogleGenerativeAI(process.env.API_KEY);
   
   try {
+    // Use gemini-1.5-flash for compatibility with this SDK version
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    
     let prompt;
-    let config = {
-        model: 'gemini-2.5-flash',
-    };
+    let generationConfig = {};
     
     if (type === 'format') {
       prompt = `Convert this khutbah into clean HTML.
@@ -41,17 +42,17 @@ export default async function handler(req, res) {
       
       KHUTBAH: ${content}`;
       
-      config.config = {
+      generationConfig = {
           responseMimeType: 'application/json'
       };
     }
     
-    const response = await ai.models.generateContent({
-      ...config,
-      contents: prompt
+    const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig
     });
     
-    const text = response.text;
+    const text = result.response.text();
     return res.status(200).json({ result: text });
   } catch (error) {
     console.error('Gemini API Error:', error);
