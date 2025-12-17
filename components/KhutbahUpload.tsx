@@ -21,13 +21,13 @@ const ProcessSection = () => {
     setProcessing(true);
     setResults([]);
     
-    // Fetch khutbahs that have content but are not yet formatted (missing <h1> tag)
+    // Smart Query: Only fetch khutbahs that have PDF text but no HTML content yet
     const { data: khutbahs, error } = await supabase
       .from('khutbahs')
-      .select('id, title, content')
-      .not('content', 'is', null)
-      .neq('content', '')
-      .not('content', 'like', '%<h1>%')
+      .select('id, title, extracted_text')
+      .not('extracted_text', 'is', null)
+      .neq('extracted_text', '')
+      .or('content.is.null,content.eq.')
       .limit(50); // Process in batches to avoid timeouts
     
     if (error) {
@@ -50,21 +50,21 @@ const ProcessSection = () => {
       setProgress({ current: i + 1, total: khutbahs.length, currentTitle: khutbah.title });
       
       try {
-        // Step 1: Format HTML
+        // Step 1: Format HTML from extracted_text
         const formatRes = await fetch('/api/process-khutbah', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: khutbah.content, type: 'format' })
+          body: JSON.stringify({ content: khutbah.extracted_text, type: 'format' })
         });
         const formatData = await formatRes.json();
         
         if (!formatRes.ok) throw new Error(formatData.error || 'Format failed');
         const html = formatData.result;
 
-        // Update khutbah content with formatted HTML
-        await supabase.from('khutbahs').update({ content: html, extracted_text: html }).eq('id', khutbah.id);
+        // Update khutbah 'content' with formatted HTML
+        await supabase.from('khutbahs').update({ content: html }).eq('id', khutbah.id);
         
-        // Step 2: Generate cards
+        // Step 2: Generate cards from the new HTML content
         const cardsRes = await fetch('/api/process-khutbah', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -105,10 +105,10 @@ const ProcessSection = () => {
            <div>
                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                    <Sparkles className="text-purple-600" size={24}/> 
-                   Process Existing Khutbahs
+                   AI Batch Processor
                </h3>
                <p className="text-gray-500 mt-1">
-                   Use AI to format HTML content and generate summary cards for khutbahs already in the database.
+                   Automatically format PDFs and generate summary cards for unprocessed library entries.
                </p>
            </div>
            
