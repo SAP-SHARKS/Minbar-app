@@ -1,6 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default async function handler(req, res) {
+  // Debugging environment variables
+  console.log('GEMINI_API_KEY exists:', !!process.env.GEMINI_API_KEY);
+  console.log('All env vars:', Object.keys(process.env));
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -10,11 +14,12 @@ export default async function handler(req, res) {
 
   const { content, type } = req.body;
   
-  // Updated key check as requested
-  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-  
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'Server configuration error: Missing GEMINI_API_KEY' });
+    return res.status(500).json({ 
+      error: 'Missing GEMINI_API_KEY',
+      availableEnvVars: Object.keys(process.env)
+    });
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
