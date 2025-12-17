@@ -17,32 +17,30 @@ const ProcessSection = () => {
   const [progress, setProgress] = useState({ current: 0, total: 0, currentTitle: '' });
   const [results, setResults] = useState<any[]>([]);
 
-  // Check if content already has HTML formatting
-  const isAlreadyFormatted = (content: string) => {
-    if (!content) return false;
-    return content.includes('<h1>') || content.includes('<h2>') || content.includes('<blockquote');
-  };
-
   const processAll = async () => {
     setProcessing(true);
     setResults([]);
     
-    // Get all khutbahs
-    const { data: allKhutbahs } = await supabase
+    // Fetch khutbahs that have content but are not yet formatted (missing <h1> tag)
+    const { data: khutbahs, error } = await supabase
       .from('khutbahs')
-      .select('id, title, content');
+      .select('id, title, content')
+      .not('content', 'is', null)
+      .neq('content', '')
+      .not('content', 'like', '%<h1>%')
+      .limit(50); // Process in batches to avoid timeouts
     
-    if (!allKhutbahs) {
+    if (error) {
+        console.error("Error fetching khutbahs:", error);
+        setResults([{ title: 'Database Error', success: false, error: error.message }]);
         setProcessing(false);
         return;
     }
 
-    // Filter out already formatted ones
-    const khutbahs = allKhutbahs.filter(k => !isAlreadyFormatted(k.content));
-    const skipped = allKhutbahs.length - khutbahs.length;
-    
-    if (skipped > 0) {
-      setResults([{ title: `Skipped ${skipped} already formatted khutbahs`, success: true, skipped: true }]);
+    if (!khutbahs || khutbahs.length === 0) {
+        setResults([{ title: 'No unprocessed khutbahs found.', success: true, skipped: true }]);
+        setProcessing(false);
+        return;
     }
     
     setProgress({ current: 0, total: khutbahs.length, currentTitle: '' });
@@ -59,9 +57,9 @@ const ProcessSection = () => {
           body: JSON.stringify({ content: khutbah.content, type: 'format' })
         });
         const formatData = await formatRes.json();
-        const html = formatData.result;
         
         if (!formatRes.ok) throw new Error(formatData.error || 'Format failed');
+        const html = formatData.result;
 
         // Update khutbah content with formatted HTML
         await supabase.from('khutbahs').update({ content: html, extracted_text: html }).eq('id', khutbah.id);
@@ -81,7 +79,7 @@ const ProcessSection = () => {
         cardsJsonString = cardsJsonString.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const cards = JSON.parse(cardsJsonString);
         
-        // Delete existing cards for this khutbah
+        // Delete existing cards for this khutbah (cleanup)
         await supabase.from('khutbah_cards').delete().eq('khutbah_id', khutbah.id);
         
         // Insert new cards with khutbah_id
@@ -119,7 +117,7 @@ const ProcessSection = () => {
                    onClick={processAll}
                    className="mt-4 md:mt-0 bg-purple-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-lg shadow-purple-200 flex items-center gap-2"
                >
-                   <Play size={18} fill="currentColor" /> Process All
+                   <Play size={18} fill="currentColor" /> Process Next Batch
                </button>
            )}
        </div>
@@ -154,12 +152,12 @@ const ProcessSection = () => {
                    {results.map((r, i) => (
                        <div key={i} className={`p-3 rounded-lg border text-sm flex justify-between items-center ${r.skipped ? 'bg-blue-50 text-blue-800 border-blue-100' : r.success ? 'bg-green-50 text-green-800 border-green-100' : 'bg-red-50 text-red-800 border-red-100'}`}>
                            <div className="flex items-center gap-2">
-                               {r.skipped ? <span>⏭️</span> : r.success ? <CheckCircle size={14}/> : <X size={14}/>} 
+                               {r.skipped ? <span>ℹ️</span> : r.success ? <CheckCircle size={14}/> : <X size={14}/>} 
                                <span className="font-medium">{r.title}</span>
                            </div>
                            <div>
                                {r.success && !r.skipped && <span className="bg-white/50 px-2 py-0.5 rounded text-xs border border-green-200">{r.cards} cards</span>}
-                               {r.skipped && <span className="text-xs opacity-70">Already formatted</span>}
+                               {r.skipped && <span className="text-xs opacity-70">Up to date</span>}
                                {!r.success && !r.skipped && <span className="text-xs font-bold">{r.error}</span>}
                            </div>
                        </div>

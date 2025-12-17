@@ -15,6 +15,37 @@ interface RichTextEditorProps {
   editorRef?: React.RefObject<HTMLDivElement>;
 }
 
+interface ToolbarButtonProps {
+  onClick: () => void;
+  isActive?: boolean;
+  children?: React.ReactNode;
+  title?: string;
+}
+
+const ToolbarButton = ({ 
+  onClick, 
+  isActive = false, 
+  children,
+  title 
+}: ToolbarButtonProps) => (
+  <button
+    onMouseDown={(e) => {
+      e.preventDefault(); 
+      onClick();
+    }}
+    title={title}
+    className={`p-1.5 rounded-lg transition-colors ${
+      isActive 
+        ? 'bg-gray-900 text-white' 
+        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+    }`}
+  >
+    {children}
+  </button>
+);
+
+const Divider = () => <div className="w-px h-5 bg-gray-300 mx-1" />;
+
 // --- Separated Toolbar Component ---
 export function EditorToolbar({ 
     onExec, 
@@ -27,36 +58,6 @@ export function EditorToolbar({
     fontSize: number,
     onFontSizeChange: (size: number) => void
 }) {
-    
-  const ToolbarButton = ({ 
-    onClick, 
-    isActive = false, 
-    children,
-    title 
-  }: { 
-    onClick: () => void; 
-    isActive?: boolean; 
-    children: React.ReactNode;
-    title?: string;
-  }) => (
-    <button
-      onMouseDown={(e) => {
-        e.preventDefault(); 
-        onClick();
-      }}
-      title={title}
-      className={`p-1.5 rounded-lg transition-colors ${
-        isActive 
-          ? 'bg-gray-900 text-white' 
-          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-      }`}
-    >
-      {children}
-    </button>
-  );
-
-  const Divider = () => <div className="w-px h-5 bg-gray-300 mx-1" />;
-
   return (
     <div className="flex items-center gap-1">
         {/* Undo/Redo */}

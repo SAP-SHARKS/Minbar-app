@@ -10,11 +10,14 @@ export default async function handler(req, res) {
 
   const { content, type } = req.body;
   
-  if (!process.env.API_KEY) {
-    return res.status(500).json({ error: 'Server configuration error: Missing API Key' });
+  // Updated key check as requested
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Server configuration error: Missing GEMINI_API_KEY' });
   }
 
-  const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+  const genAI = new GoogleGenerativeAI(apiKey);
   
   try {
     // Use gemini-1.5-flash for compatibility with this SDK version
