@@ -153,7 +153,6 @@ export const LearningSection = ({ user }: { user: any }) => {
   <FileText className="w-7 h-7 md:w-8 md:h-8" />
 )}
 
-}
                    </div>
                    <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-md text-white text-xs md:text-sm font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
                       {resource.type === 'video' ? <Clock size={14}/> : <BookOpen size={14}/>}
