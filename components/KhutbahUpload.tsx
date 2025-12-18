@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileSpreadsheet, FileText, CheckCircle, AlertCircle, 
-  Loader2, ChevronRight, UploadCloud, X, Plus,
-  Check, AlertTriangle, Sparkles, Play, Search, User
+  Loader2, UploadCloud, Plus, Check, User
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import * as XLSX from 'xlsx';
+import { Imam } from '../types';
 
 interface KhutbahUploadProps {
   onSuccess: () => void;
@@ -14,6 +14,8 @@ interface KhutbahUploadProps {
 // --- Excel Import Section ---
 const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
   const [khutbahs, setKhutbahs] = useState<any[]>([]);
+  const [imams, setImams] = useState<Imam[]>([]);
+  const [selectedImamId, setSelectedImamId] = useState<string>('');
   const [showPreview, setShowPreview] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
@@ -21,6 +23,15 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
   const [importResults, setImportResults] = useState({ success: 0, errors: 0 });
   const [errorMsg, setErrorMsg] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetchImams();
+  }, []);
+
+  async function fetchImams() {
+    const { data } = await supabase.from('imams').select('*').order('name');
+    if (data) setImams(data);
+  }
 
   async function handleExcelUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -45,9 +56,13 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
         return;
       }
 
+      const selectedImam = imams.find(i => i.id === selectedImamId);
+
       const mapped = validRows.map(row => ({
         title: String(row['Topic'] || '').trim(),
-        author: String(row['Speaker'] || '').trim(),
+        // Save BOTH imam_id and author name
+        imam_id: selectedImamId || null,
+        author: selectedImam ? selectedImam.name : String(row['Speaker'] || 'Unknown').trim(),
         topic: String(row['Category'] || 'General').trim(),
         tags: row['Tags'] ? String(row['Tags']).split(',').map((t: string) => t.trim()) : ['General'],
         youtube_url: row['Youtube link'] ? String(row['Youtube link']).trim() : null,
@@ -74,7 +89,10 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
     for (let i = 0; i < khutbahs.length; i += batchSize) {
       const batch = khutbahs.slice(i, i + batchSize);
       const { error } = await supabase.from('khutbahs').insert(batch);
-      if (error) errorCount += batch.length;
+      if (error) {
+        console.error("Batch error:", error);
+        errorCount += batch.length;
+      }
       else successCount += batch.length;
       setImportProgress(Math.min(i + batchSize, khutbahs.length));
     }
@@ -82,13 +100,25 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
     setIsImporting(false);
     setImportComplete(true);
     setImportResults({ success: successCount, errors: errorCount });
-    if (onSuccess) setTimeout(onSuccess, 2000);
+    if (onSuccess && successCount > 0) setTimeout(onSuccess, 2000);
   }
 
   return (
     <div className="p-8">
       <h2 className="text-xl font-bold mb-2 text-gray-900">Import Master Excel</h2>
-      <p className="text-gray-600 mb-6">Upload your master spreadsheet to create database entries.</p>
+      <p className="text-gray-600 mb-6">Assign a default Imam and upload your spreadsheet.</p>
+
+      <div className="mb-6 max-w-md">
+        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Default Imam for this file</label>
+        <select 
+          value={selectedImamId}
+          onChange={(e) => setSelectedImamId(e.target.value)}
+          className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+        >
+          <option value="">-- Optional: Override speaker from file --</option>
+          {imams.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+        </select>
+      </div>
 
       {errorMsg && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
@@ -106,7 +136,6 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
              <FileSpreadsheet size={40} />
           </div>
           <p className="text-xl font-bold text-gray-900">Select Excel file</p>
-          <p className="text-gray-400 mt-2 text-sm">Schema: Topic, Speaker, Category, Tags</p>
         </div>
       )}
       
@@ -117,7 +146,7 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
               <thead className="bg-gray-50 sticky top-0 border-b border-gray-200">
                 <tr>
                   <th className="p-3 text-left font-bold text-gray-500 uppercase text-xs">Title</th>
-                  <th className="p-3 text-left font-bold text-gray-500 uppercase text-xs">Speaker</th>
+                  <th className="p-3 text-left font-bold text-gray-500 uppercase text-xs">Assigned Author</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -154,8 +183,8 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
 // --- PDF Upload Section ---
 const PdfUploadSection = () => {
   const [files, setFiles] = useState<File[]>([]);
-  const [authors, setAuthors] = useState<string[]>([]);
-  const [selectedAuthor, setSelectedAuthor] = useState<string>('');
+  const [imams, setImams] = useState<Imam[]>([]);
+  const [selectedImamId, setSelectedImamId] = useState<string>('');
   const [matchResults, setMatchResults] = useState<Record<number, any>>({});
   const [uploadProgress, setUploadProgress] = useState<Record<number, string>>({});
   const [isUploading, setIsUploading] = useState(false);
@@ -163,36 +192,41 @@ const PdfUploadSection = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchUniqueAuthors();
+    fetchImams();
   }, []);
 
-  async function fetchUniqueAuthors() {
-    const { data } = await supabase.from('khutbahs').select('author').not('author', 'is', null);
-    if (data) {
-        const unique = Array.from(new Set(data.map(i => i.author))).filter(Boolean).sort() as string[];
-        setAuthors(unique);
+  async function fetchImams() {
+    // Dropdown MUST come from imams table only
+    const { data, error } = await supabase
+      .from('imams')
+      .select('*')
+      .order('name');
+    
+    if (data && !error) {
+        setImams(data);
+    } else if (error) {
+        console.error("Error fetching imams:", error);
     }
   }
 
-  async function findMatchingKhutbah(fileName: string, author: string) {
-    if (!author) return null;
+  async function findMatchingKhutbah(fileName: string, imamId: string) {
+    if (!imamId) return null;
     
     // Clean the filename
     const cleanTitle = fileName
       .replace(/^\d+_/, '')              // Remove leading numbers
       .replace(/_/g, ' ')                // Replace underscores
       .replace(/\.pdf$/i, '')            // Remove .pdf
-      .replace(new RegExp(author, 'gi'), '') // Remove author name if in filename
       .replace(/\s+/g, ' ')              // Normalize spaces
       .trim();
     
     if (!cleanTitle) return null;
 
-    // Search ONLY this author's khutbahs
+    // Search ONLY this selected imam's khutbahs
     const { data: matches } = await supabase
       .from('khutbahs')
       .select('*')
-      .eq('author', author)
+      .eq('imam_id', imamId)
       .ilike('title', `%${cleanTitle}%`);
     
     return matches && matches.length > 0 ? matches[0] : null;
@@ -207,26 +241,29 @@ const PdfUploadSection = () => {
     // Auto-match for newly selected files
     const newMatches: Record<number, any> = { ...matchResults };
     for (let i = 0; i < selectedFiles.length; i++) {
-        newMatches[startIdx + i] = await findMatchingKhutbah(selectedFiles[i].name, selectedAuthor);
+        newMatches[startIdx + i] = await findMatchingKhutbah(selectedFiles[i].name, selectedImamId);
     }
     setMatchResults(newMatches);
   };
 
   useEffect(() => {
     async function reMatch() {
-        if (files.length > 0 && selectedAuthor) {
+        if (files.length > 0 && selectedImamId) {
             const matches: Record<number, any> = {};
             for (let i = 0; i < files.length; i++) {
-                matches[i] = await findMatchingKhutbah(files[i].name, selectedAuthor);
+                matches[i] = await findMatchingKhutbah(files[i].name, selectedImamId);
             }
             setMatchResults(matches);
         }
     }
     reMatch();
-  }, [selectedAuthor]);
+  }, [selectedImamId]);
 
   async function processAllFiles() {
-    if (!selectedAuthor) return;
+    if (!selectedImamId) return;
+    const selectedImam = imams.find(i => i.id === selectedImamId);
+    if (!selectedImam) return;
+
     setIsUploading(true);
     setCurrentFileIndex(0);
     
@@ -237,8 +274,8 @@ const PdfUploadSection = () => {
       
       try {
         setUploadProgress(prev => ({ ...prev, [i]: 'Uploading...' }));
-        const safeAuthor = selectedAuthor.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        const storagePath = `${safeAuthor}/${Date.now()}_${file.name.replace(/[^\w\s\-_.]/g, '')}`;
+        const safeImamName = selectedImam.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        const storagePath = `${safeImamName}/${Date.now()}_${file.name.replace(/[^\w\s\-_.]/g, '')}`;
         const { error: uploadError } = await supabase.storage.from('khutbahs').upload(storagePath, file, { upsert: true });
         if (uploadError) throw uploadError;
         const { data: { publicUrl } } = supabase.storage.from('khutbahs').getPublicUrl(storagePath);
@@ -288,13 +325,18 @@ const PdfUploadSection = () => {
               content: formattedHtml,
               extracted_text: formattedHtml,
               file_url: publicUrl,
-              file_path: storagePath
+              file_path: storagePath,
+              // Save BOTH imam_id and author name
+              imam_id: selectedImamId,
+              author: selectedImam.name
           }).eq('id', khutbahId);
           if (upErr) throw upErr;
         } else {
           const { data: newKhutbah, error: createError } = await supabase.from('khutbahs').insert({
               title: file.name.replace('.pdf', '').replace(/_/g, ' '),
-              author: selectedAuthor,
+              // Save BOTH imam_id and author name
+              imam_id: selectedImamId,
+              author: selectedImam.name,
               content: formattedHtml,
               extracted_text: formattedHtml,
               file_url: publicUrl,
@@ -331,26 +373,26 @@ const PdfUploadSection = () => {
         <div className="grid md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-              <User size={16} className="text-emerald-600"/> Select Author
+              <User size={16} className="text-emerald-600"/> Select Imam / Author
             </label>
             <select 
-              value={selectedAuthor}
-              onChange={(e) => setSelectedAuthor(e.target.value)}
+              value={selectedImamId}
+              onChange={(e) => setSelectedImamId(e.target.value)}
               className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
             >
               <option value="">-- Choose Author --</option>
-              {authors.map(a => (
-                <option key={a} value={a}>{a}</option>
+              {imams.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
           </div>
-          <div>
-             <p className="text-xs text-gray-400 mt-8">Matching logic: Author → Filename → Database Title</p>
+          <div className="flex items-end">
+             <p className="text-xs text-gray-400 pb-2">All files in this batch will be assigned to the selected Imam.</p>
           </div>
         </div>
       </div>
 
-      {!selectedAuthor ? (
+      {!selectedImamId ? (
         <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200 text-gray-400">
           <User size={48} className="mx-auto mb-4 opacity-20"/>
           <p className="text-lg font-medium">Please select an author above to begin</p>
