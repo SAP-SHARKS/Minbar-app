@@ -243,8 +243,8 @@ const HomeView = ({
             </section>
 
             {/* Topics Grid */}
-            <section className="bg-gray-100 -mx-8 px-8 py-14">
-                <div className="max-w-[2000px] mx-auto">
+            <section className="bg-gray-100 -mx-6 px-6 py-14">
+                <div className="w-full">
                     <div className="flex justify-between items-end mb-8">
                         <div>
                             <h2 className="text-2xl font-bold text-gray-900">Browse by Topic</h2>
@@ -293,7 +293,7 @@ const HomeView = ({
                     </div>
                     <button onClick={() => onNavigate('list', { sort: 'trending' })} className="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">See All <ChevronRight size={14}/></button>
                 </div>
-                <div className="flex overflow-x-auto pb-6 -mx-4 px-4 custom-scrollbar gap-6">
+                <div className="flex overflow-x-auto pb-6 -mx-2 px-2 custom-scrollbar gap-6">
                     {data.classics.map(k => (
                         <div key={k.id} className="min-w-[300px] w-[300px]">
                             <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} />
@@ -616,27 +616,26 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       return (
         <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
             <div className="flex-1 overflow-y-auto">
-            <div className="max-w-[2000px] mx-auto p-8 xl:p-12">
+            <div className="page-container py-8 xl:py-12">
                 <button onClick={() => setView('home')} className="mb-8 flex items-center text-gray-500 hover:text-emerald-600 gap-2 font-medium text-lg"><ChevronLeft size={24} /> Back to Library</button>
-                <div className="flex justify-between items-start mb-10">
+                <div className="flex flex-col xl:flex-row justify-between items-start mb-10 gap-6">
                 <div>
-                    <h1 className="text-5xl md:text-6xl font-serif font-bold text-gray-900 mb-4">{detailData.title}</h1>
-                    <div className="flex items-center gap-4 text-lg text-gray-600">
+                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-gray-900 mb-4">{detailData.title}</h1>
+                    <div className="flex flex-wrap items-center gap-4 text-lg text-gray-600">
                     <span className="font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg">{detailData.author}</span>
                     <span>•</span>
                     <span>{detailData.topic}</span>
                     {detailData.date && <><span>•</span><span>{detailData.date}</span></>}
                     </div>
                 </div>
-                <div className="flex gap-3">
-                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-2 shadow-sm mr-2">
+                <div className="flex flex-wrap gap-3 w-full xl:w-auto">
+                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-2 shadow-sm">
                         <Type size={18} className="text-gray-400" />
                         <button onClick={() => setContentFontSize(s => Math.max(14, s-2))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><Minus size={16} /></button>
                         <span className="w-8 text-center font-bold text-gray-700 select-none">{contentFontSize}</span>
                         <button onClick={() => setContentFontSize(s => Math.min(48, s+2))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><Plus size={16} /></button>
                     </div>
                     
-                    {/* Process with AI Button */}
                     <button 
                         onClick={handleProcessAI}
                         disabled={isProcessing}
@@ -646,7 +645,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                         {isProcessing ? 'Processing...' : 'Process with AI'}
                     </button>
 
-                    {/* Add to My Khutbahs Logic */}
                     {isInMyKhutbahs ? (
                         <button 
                             disabled 
@@ -672,11 +670,10 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                 </div>
                 
                 <div className="flex flex-col lg:flex-row gap-8">
-                    {/* Main Content (Left/Center) */}
-                    <div className="flex-1">
-                        <div className="bg-white rounded-lg p-8 shadow-sm border border-gray-100">
+                    <div className="flex-1 min-w-0">
+                        <div className="bg-white rounded-lg p-8 shadow-sm border border-gray-100 w-full overflow-hidden">
                             <div 
-                                className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed"
+                                className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed break-words"
                                 style={{ fontSize: `${contentFontSize}px` }}
                                 dangerouslySetInnerHTML={{ __html: detailData.content || '' }}
                             />
@@ -687,7 +684,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                         </div>
                     </div>
 
-                    {/* Sidebar (Right) - Only if cards exist */}
                     {khutbahCards.length > 0 && (
                         <div className="w-full lg:w-96 shrink-0">
                             <h3 className="font-bold text-gray-900 mb-4 text-lg flex items-center gap-2">
@@ -730,30 +726,29 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       );
   }
 
-  // ... (Keep existing Home/List render)
   return (
-    <div className="h-full md:pl-20 bg-gray-50 overflow-y-auto"> 
-      <div className="flex-1 flex flex-col max-w-[2000px] mx-auto p-8 xl:p-12">
-        <div className="pb-8">
+    <div className="h-full md:pl-20 bg-gray-50 overflow-y-auto w-full"> 
+      <div className="page-container py-8 xl:py-12">
+        <div className="pb-8 w-full">
           {showHero && view === 'home' && (
              <div className="mb-16 mt-12 animate-in fade-in slide-in-from-top-4 duration-500 text-center">
-                <h1 className="text-6xl md:text-7xl xl:text-8xl font-serif font-bold text-gray-900 mb-8 tracking-tight max-w-5xl mx-auto leading-tight">Find a khutbah in <span className="text-emerald-600">minutes</span>, not days.</h1>
-                <div className="max-w-4xl mx-auto relative mb-16">
-                    <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none"><Search className="text-gray-400" size={32} /></div>
+                <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-serif font-bold text-gray-900 mb-8 tracking-tight max-w-5xl mx-auto leading-tight">Find a khutbah in <span className="text-emerald-600">minutes</span>, not days.</h1>
+                <div className="max-w-4xl mx-auto relative mb-16 px-4 sm:px-0">
+                    <div className="absolute inset-y-0 left-6 sm:left-10 flex items-center pointer-events-none"><Search className="text-gray-400" size={32} /></div>
                     <input 
                         type="text" 
-                        placeholder="Search by topic, imam, or keyword..." 
+                        placeholder="Topic, imam, or keyword..." 
                         value={activeFilters.search || ''} 
                         onChange={(e) => setActiveFilters({...activeFilters, search: e.target.value})}
                         onKeyDown={(e) => {
                             if(e.key === 'Enter') handleNavigate('list', { ...activeFilters, search: (e.target as HTMLInputElement).value });
                         }}
-                        className="w-full pl-20 pr-40 py-8 bg-white border border-gray-200 rounded-full shadow-2xl shadow-emerald-50/50 focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 outline-none text-2xl transition-all placeholder-gray-300" 
+                        className="w-full pl-16 sm:pl-24 pr-24 sm:pr-40 py-6 sm:py-8 bg-white border border-gray-200 rounded-full shadow-2xl shadow-emerald-50/50 focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 outline-none text-xl sm:text-2xl transition-all placeholder-gray-300" 
                     />
-                    <div className="absolute right-3 top-3 bottom-3">
+                    <div className="absolute right-3 sm:right-5 top-3 sm:top-5 bottom-3 sm:top-5">
                         <button 
                             onClick={() => handleNavigate('list', activeFilters)}
-                            className="h-full bg-gray-900 text-white px-10 rounded-full font-bold text-lg hover:bg-gray-800 transition-colors"
+                            className="h-full bg-gray-900 text-white px-6 sm:px-10 rounded-full font-bold text-base sm:text-lg hover:bg-gray-800 transition-colors"
                         >
                             Search
                         </button>
@@ -763,7 +758,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
           )}
           
           {(!showHero || view !== 'home') && (
-            <div className="flex justify-between items-end mb-10">
+            <div className="flex justify-between items-end mb-10 w-full">
                 <div className="relative w-full max-w-xl">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                     <input 

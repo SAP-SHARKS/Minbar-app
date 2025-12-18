@@ -50,21 +50,21 @@ export const MyKhutbahs: React.FC<MyKhutbahsProps> = ({ user, onEdit, onLive, on
   }
 
   return (
-    <div className="flex h-screen md:pl-20 bg-gray-50 overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-8 xl:p-12">
-        <div className="flex justify-between items-end mb-8">
+    <div className="flex h-full md:pl-20 bg-gray-50 overflow-y-auto w-full">
+      <div className="page-container py-8 xl:py-12">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">My Khutbahs</h1>
             <p className="text-gray-500 mt-1">Your personal collection of edited sermons.</p>
           </div>
-          <div className="relative">
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input 
               type="text" 
-              placeholder="Search your collection..." 
+              placeholder="Search..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 outline-none w-64" 
+              className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-emerald-500 outline-none w-full" 
             />
           </div>
         </div>
@@ -75,7 +75,7 @@ export const MyKhutbahs: React.FC<MyKhutbahsProps> = ({ user, onEdit, onLive, on
               <BookOpen size={32} className="text-gray-400" />
             </div>
             <h3 className="text-xl font-bold text-gray-700 mb-2">No khutbahs found</h3>
-            <p className="text-gray-500 mb-6 text-center max-w-md">
+            <p className="text-gray-500 mb-6 text-center max-w-md px-6">
               {searchQuery ? 'No results for your search.' : !user ? 'Please sign in to view your khutbahs.' : 'You haven\'t added any khutbahs to your collection yet. Browse the library to find one.'}
             </p>
             <button 
@@ -86,7 +86,7 @@ export const MyKhutbahs: React.FC<MyKhutbahsProps> = ({ user, onEdit, onLive, on
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
             {filteredKhutbahs.map(k => (
               <div key={k.id} className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all group flex flex-col h-full">
                 <div className="flex justify-between items-start mb-4">

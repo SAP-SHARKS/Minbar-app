@@ -40,21 +40,21 @@ export default function App() {
   );
 
   return (
-    <div className="font-sans antialiased text-gray-900 h-screen overflow-hidden flex bg-gray-50">
+    <div className="font-sans antialiased text-gray-900 h-screen overflow-hidden flex bg-gray-50 w-full relative">
       {/* Global Modal */}
       <LoginModal />
 
       <Navigation activeTab={activeTab} setActiveTab={setActiveTab} unreadCount={2} />
 
       {activeTab !== 'live' && (
-        <div className="fixed top-0 md:left-20 left-0 right-0 h-14 bg-gray-900 text-white flex items-center justify-between px-6 z-20 text-xs shadow-md">
+        <div className="fixed top-0 md:left-20 left-0 right-0 h-14 bg-gray-900 text-white flex items-center justify-between px-6 z-20 text-xs shadow-md w-auto">
           <div className="flex items-center gap-2">
             <span className="bg-red-500 px-2 py-0.5 rounded font-bold animate-pulse">NEW</span>
-            <span className="truncate max-w-md">Imam Conference 2024: Registration is now open! Early bird discounts end Friday.</span>
+            <span className="truncate max-w-[200px] sm:max-w-md">Imam Conference 2024: Registration is now open! Early bird discounts end Friday.</span>
           </div>
 
           <div className="flex items-center gap-4">
-            <button className="hover:text-gray-300 flex items-center gap-1 text-gray-400">
+            <button className="hover:text-gray-300 hidden sm:flex items-center gap-1 text-gray-400">
               <X size={14} /> Dismiss
             </button>
 
@@ -63,7 +63,7 @@ export default function App() {
         </div>
       )}
 
-      <main className={`flex-1 h-full ${activeTab !== 'live' ? 'pt-16' : ''}`}>
+      <main className={`flex-1 h-full w-full overflow-hidden ${activeTab !== 'live' ? 'pt-16' : ''}`}>
         {activeTab === 'dashboard' && (
           <KhutbahLibrary 
             user={user} 

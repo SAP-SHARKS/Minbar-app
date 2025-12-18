@@ -15,22 +15,22 @@ export const Scheduler = ({ user }: { user: any }) => {
   };
 
   return (
-    <div className="flex h-screen md:pl-20 bg-gray-50 overflow-hidden">
-        <div className="flex-1 overflow-y-auto">
-            <div className="max-w-7xl mx-auto p-8">
-                <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-3xl p-8 md:p-10 text-white shadow-xl flex flex-col md:flex-row justify-between items-center relative overflow-hidden mb-10 animate-in slide-in-from-top-4 duration-500">
-                    <div className="relative z-10 text-center md:text-left">
+    <div className="flex h-full md:pl-20 bg-gray-50 overflow-y-auto w-full">
+        <div className="page-container py-8 xl:py-12">
+            <div className="w-full">
+                <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-3xl p-6 md:p-10 text-white shadow-xl flex flex-col md:flex-row justify-between items-center relative overflow-hidden mb-10 animate-in slide-in-from-top-4 duration-500">
+                    <div className="relative z-10 text-center md:text-left mb-6 md:mb-0">
                         <div className="inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-500/30 px-3 py-1 rounded-full text-emerald-300 font-bold uppercase tracking-wider text-[10px] mb-4"><Clock size={12}/> Next Engagement</div>
-                        <h3 className="text-4xl md:text-5xl font-serif font-bold mb-3 leading-tight">Jumu'ah Khutbah</h3>
-                        <div className="flex flex-col md:flex-row items-center gap-2 md:gap-6 text-gray-300 text-lg">
+                        <h3 className="text-3xl md:text-4xl lg:text-5xl font-serif font-bold mb-3 leading-tight">Jumu'ah Khutbah</h3>
+                        <div className="flex flex-col md:flex-row items-center gap-2 md:gap-6 text-gray-300 text-base md:text-lg">
                             <span className="flex items-center gap-2"><CalendarIcon size={20}/> Friday, Dec 15</span>
                             <span className="hidden md:inline">•</span>
                             <span className="flex items-center gap-2"><Clock size={20}/> 1:00 PM</span>
                             <span className="hidden md:inline">•</span>
-                            <span className="flex items-center gap-2"><MapPin size={20}/> Masjid Al-Huda</span>
+                            <span className="flex items-center gap-2 text-center md:text-left"><MapPin size={20}/> Masjid Al-Huda</span>
                         </div>
                     </div>
-                    <div className="relative z-10 mt-6 md:mt-0 flex flex-col items-center gap-2">
+                    <div className="relative z-10 flex flex-col items-center gap-2">
                         <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 text-center min-w-[120px]">
                             <div className="text-5xl font-bold text-white mb-1">15</div>
                             <div className="text-sm font-bold uppercase text-emerald-400 tracking-widest">Dec</div>
@@ -39,7 +39,7 @@ export const Scheduler = ({ user }: { user: any }) => {
                     <div className="absolute right-0 top-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
                     <div className="absolute left-0 bottom-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 pointer-events-none"></div>
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12">
                     <div className="lg:col-span-2 space-y-6">
                         <div className="flex justify-between items-center">
                             <h2 className="text-2xl font-bold text-gray-900">December 2024</h2>
@@ -48,19 +48,21 @@ export const Scheduler = ({ user }: { user: any }) => {
                                 <button className="p-2 hover:bg-gray-100 rounded-full transition-colors border border-gray-200"><ChevronRight size={20} className="text-gray-600"/></button>
                             </div>
                         </div>
-                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                            <div className="grid grid-cols-7 border-b border-gray-100">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (<div key={d} className="py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">{d}</div>))}</div>
-                            <div className="grid grid-cols-7 grid-rows-5 h-[500px]">
-                                {Array.from({length: 35}).map((_, i) => {
-                                    const day = i + 1 <= 31 ? i + 1 : '';
-                                    const isToday = day === 12;
-                                    const hasEvent = day === 15 || day === 22;
-                                    return (
-                                        <div key={i} className={`p-2 border-r border-b border-gray-50 relative group transition-colors hover:bg-gray-50 ${day ? '' : 'bg-gray-50/30'}`}>
-                                            {day && (<><span className={`flex items-center justify-center w-7 h-7 rounded-full text-sm font-medium ${isToday ? 'bg-emerald-600 text-white' : 'text-gray-500'}`}>{day}</span>{hasEvent && (<div className="mt-2 text-[10px] bg-emerald-100 text-emerald-800 p-1.5 rounded font-bold truncate border border-emerald-200">1:00 PM Khutbah</div>)}</>)}
-                                        </div>
-                                    )
-                                })}
+                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-x-auto overflow-y-hidden">
+                            <div className="min-w-[600px]">
+                                <div className="grid grid-cols-7 border-b border-gray-100">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (<div key={d} className="py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-wider">{d}</div>))}</div>
+                                <div className="grid grid-cols-7 grid-rows-5 h-[500px]">
+                                    {Array.from({length: 35}).map((_, i) => {
+                                        const day = i + 1 <= 31 ? i + 1 : '';
+                                        const isToday = day === 12;
+                                        const hasEvent = day === 15 || day === 22;
+                                        return (
+                                            <div key={i} className={`p-2 border-r border-b border-gray-50 relative group transition-colors hover:bg-gray-50 ${day ? '' : 'bg-gray-50/30'}`}>
+                                                {day && (<><span className={`flex items-center justify-center w-7 h-7 rounded-full text-sm font-medium ${isToday ? 'bg-emerald-600 text-white' : 'text-gray-500'}`}>{day}</span>{hasEvent && (<div className="mt-2 text-[10px] bg-emerald-100 text-emerald-800 p-1.5 rounded font-bold truncate border border-emerald-200">1:00 PM Khutbah</div>)}</>)}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
                             </div>
                         </div>
                     </div>
