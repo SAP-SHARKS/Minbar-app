@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 import { Navigation } from './components/Navigation';
@@ -24,6 +24,13 @@ export default function App() {
   // Navigation State
   const [liveKhutbahId, setLiveKhutbahId] = useState<string | null>(null);
   const [editorKhutbahId, setEditorKhutbahId] = useState<string | null>(null);
+
+  // Supabase Diagnostics
+  useEffect(() => {
+    const metaEnv = (import.meta as any).env;
+    console.log('[ENV] SUPABASE URL:', metaEnv?.VITE_SUPABASE_URL);
+    console.log('[ENV] SUPABASE ANON KEY exists:', !!metaEnv?.VITE_SUPABASE_ANON_KEY);
+  }, []);
 
   if (isLoading) return (
     <div className="h-screen flex items-center justify-center bg-gray-50 flex-col gap-4">
@@ -61,11 +68,7 @@ export default function App() {
           <KhutbahLibrary 
             user={user} 
             showHero={true}
-            onStartLive={(id) => {
-              // Usually from Library we view details, then add to My Khutbahs
-              // But if we want to support direct live (read only), we could
-              // For now, let's keep Library navigation internal
-            }} 
+            onStartLive={(id) => {}} 
             onAddToMyKhutbahs={(id) => {
                setEditorKhutbahId(id);
                setActiveTab('editor');

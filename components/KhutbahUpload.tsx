@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileSpreadsheet, FileText, CheckCircle, AlertCircle, 
-  Loader2, ChevronRight, UploadCloud, X, File,
-  Check, AlertTriangle, Sparkles, Play
+  Loader2, ChevronRight, UploadCloud, X, Plus,
+  Check, AlertTriangle, Sparkles, Play, Search, User
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import * as XLSX from 'xlsx';
@@ -10,164 +10,6 @@ import * as XLSX from 'xlsx';
 interface KhutbahUploadProps {
   onSuccess: () => void;
 }
-
-// --- Process Section (AI Batch) ---
-const ProcessSection = () => {
-  const [processing, setProcessing] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0, currentTitle: '' });
-  const [results, setResults] = useState<any[]>([]);
-
-  const processAll = async () => {
-    setProcessing(true);
-    setResults([]);
-    
-    // Smart Query: Only fetch khutbahs that have PDF text but no HTML content yet
-    const { data: khutbahs, error } = await supabase
-      .from('khutbahs')
-      .select('id, title, extracted_text')
-      .not('extracted_text', 'is', null)
-      .neq('extracted_text', '')
-      .or('content.is.null,content.eq.')
-      .limit(50); // Process in batches to avoid timeouts
-    
-    if (error) {
-        console.error("Error fetching khutbahs:", error);
-        setResults([{ title: 'Database Error', success: false, error: error.message }]);
-        setProcessing(false);
-        return;
-    }
-
-    if (!khutbahs || khutbahs.length === 0) {
-        setResults([{ title: 'No unprocessed khutbahs found.', success: true, skipped: true }]);
-        setProcessing(false);
-        return;
-    }
-    
-    setProgress({ current: 0, total: khutbahs.length, currentTitle: '' });
-    
-    for (let i = 0; i < khutbahs.length; i++) {
-      const khutbah = khutbahs[i];
-      setProgress({ current: i + 1, total: khutbahs.length, currentTitle: khutbah.title });
-      
-      try {
-        // Step 1: Format HTML from extracted_text
-        const formatRes = await fetch('/api/process-khutbah', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: khutbah.extracted_text, type: 'format' })
-        });
-        const formatData = await formatRes.json();
-        
-        if (!formatRes.ok) throw new Error(formatData.error || 'Format failed');
-        const html = formatData.result;
-
-        // Update khutbah 'content' with formatted HTML
-        await supabase.from('khutbahs').update({ content: html }).eq('id', khutbah.id);
-        
-        // Step 2: Generate cards from the new HTML content
-        const cardsRes = await fetch('/api/process-khutbah', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: html, type: 'cards' })
-        });
-        const cardsData = await cardsRes.json();
-        
-        if (!cardsRes.ok) throw new Error(cardsData.error || 'Cards failed');
-
-        let cardsJsonString = cardsData.result;
-        // Clean markdown if present
-        cardsJsonString = cardsJsonString.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const cards = JSON.parse(cardsJsonString);
-        
-        // Delete existing cards for this khutbah (cleanup)
-        await supabase.from('khutbah_cards').delete().eq('khutbah_id', khutbah.id);
-        
-        // Insert new cards with khutbah_id
-        const cardsWithId = cards.map((card: any) => ({ ...card, khutbah_id: khutbah.id }));
-        await supabase.from('khutbah_cards').insert(cardsWithId);
-        
-        setResults(prev => [...prev, { title: khutbah.title, success: true, cards: cards.length }]);
-        
-        // 2 second delay to avoid rate limiting
-        await new Promise(r => setTimeout(r, 2000));
-        
-      } catch (error: any) {
-        setResults(prev => [...prev, { title: khutbah.title, success: false, error: error.message }]);
-      }
-    }
-    
-    setProcessing(false);
-  };
-
-  return (
-    <div className="mt-12 pt-10 border-t border-gray-200">
-       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-           <div>
-               <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                   <Sparkles className="text-purple-600" size={24}/> 
-                   AI Batch Processor
-               </h3>
-               <p className="text-gray-500 mt-1">
-                   Automatically format PDFs and generate summary cards for unprocessed library entries.
-               </p>
-           </div>
-           
-           {!processing && (
-               <button
-                   onClick={processAll}
-                   className="mt-4 md:mt-0 bg-purple-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-lg shadow-purple-200 flex items-center gap-2"
-               >
-                   <Play size={18} fill="currentColor" /> Process Next Batch
-               </button>
-           )}
-       </div>
-
-       {/* Progress Display */}
-       {processing && (
-           <div className="bg-purple-50 rounded-xl p-6 border border-purple-100 mb-6">
-               <div className="flex items-center gap-4 mb-2">
-                   <Loader2 size={24} className="animate-spin text-purple-600"/>
-                   <div>
-                       <h4 className="font-bold text-purple-900">Processing Khutbahs...</h4>
-                       <p className="text-sm text-purple-700">
-                           {progress.current} of {progress.total} • Current: <strong>{progress.currentTitle}</strong>
-                       </p>
-                   </div>
-               </div>
-               {/* Progress Bar */}
-               <div className="w-full bg-purple-200 rounded-full h-2.5 mt-2">
-                   <div 
-                       className="bg-purple-600 h-2.5 rounded-full transition-all duration-300" 
-                       style={{ width: `${(progress.current / Math.max(progress.total, 1)) * 100}%` }}
-                   ></div>
-               </div>
-           </div>
-       )}
-
-       {/* Results Log */}
-       {results.length > 0 && (
-           <div className="bg-gray-50 rounded-2xl border border-gray-200 p-6 max-h-[300px] overflow-y-auto custom-scrollbar">
-               <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Processing Log</h4>
-               <div className="space-y-2">
-                   {results.map((r, i) => (
-                       <div key={i} className={`p-3 rounded-lg border text-sm flex justify-between items-center ${r.skipped ? 'bg-blue-50 text-blue-800 border-blue-100' : r.success ? 'bg-green-50 text-green-800 border-green-100' : 'bg-red-50 text-red-800 border-red-100'}`}>
-                           <div className="flex items-center gap-2">
-                               {r.skipped ? <span>ℹ️</span> : r.success ? <CheckCircle size={14}/> : <X size={14}/>} 
-                               <span className="font-medium">{r.title}</span>
-                           </div>
-                           <div>
-                               {r.success && !r.skipped && <span className="bg-white/50 px-2 py-0.5 rounded text-xs border border-green-200">{r.cards} cards</span>}
-                               {r.skipped && <span className="text-xs opacity-70">Up to date</span>}
-                               {!r.success && !r.skipped && <span className="text-xs font-bold">{r.error}</span>}
-                           </div>
-                       </div>
-                   ))}
-               </div>
-           </div>
-       )}
-    </div>
-  );
-};
 
 // --- Excel Import Section ---
 const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
@@ -188,24 +30,14 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
       setErrorMsg('');
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
+      let sheet = workbook.Sheets['Detail Cheklist'] || workbook.Sheets[workbook.SheetNames[0]];
       
-      // Get "Detail Cheklist" sheet
-      let sheet = workbook.Sheets['Detail Cheklist'];
-      
-      // Fallback if specific sheet not found
       if (!sheet) {
-         console.warn('"Detail Cheklist" sheet not found, trying first sheet.');
-         if (workbook.SheetNames.length > 0) {
-             sheet = workbook.Sheets[workbook.SheetNames[0]];
-         } else {
-             setErrorMsg('Could not find any sheets in the Excel file.');
-             return;
-         }
+          setErrorMsg('Could not find any sheets in the Excel file.');
+          return;
       }
       
       const rows: any[] = XLSX.utils.sheet_to_json(sheet);
-      
-      // Filter rows that have a Topic (title)
       const validRows = rows.filter(row => row['Topic'] && String(row['Topic']).trim() !== '');
       
       if (validRows.length === 0) {
@@ -213,7 +45,6 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
         return;
       }
 
-      // Map to database structure
       const mapped = validRows.map(row => ({
         title: String(row['Topic'] || '').trim(),
         author: String(row['Speaker'] || '').trim(),
@@ -221,8 +52,6 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
         tags: row['Tags'] ? String(row['Tags']).split(',').map((t: string) => t.trim()) : ['General'],
         youtube_url: row['Youtube link'] ? String(row['Youtube link']).trim() : null,
         duration: row['Duration of khutbah'] ? String(row['Duration of khutbah']).trim() : null,
-        file_url: null,
-        file_path: null,
         rating: 4.8,
         likes_count: 0,
         comments_count: 0,
@@ -232,47 +61,34 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
       setKhutbahs(mapped);
       setShowPreview(true);
     } catch (err: any) {
-        console.error("Excel parse error", err);
-        setErrorMsg("Failed to parse Excel file. Please ensure it is a valid .xlsx or .xls file.");
+        setErrorMsg("Failed to parse Excel file.");
     }
   }
 
   async function importToDatabase() {
     setIsImporting(true);
-    setImportProgress(0);
-    
     const batchSize = 50;
     let successCount = 0;
     let errorCount = 0;
     
     for (let i = 0; i < khutbahs.length; i += batchSize) {
       const batch = khutbahs.slice(i, i + batchSize);
-      
-      const { error } = await supabase
-        .from('khutbahs')
-        .insert(batch);
-      
-      if (error) {
-        console.error('Batch error:', error);
-        errorCount += batch.length;
-      } else {
-        successCount += batch.length;
-      }
-      
+      const { error } = await supabase.from('khutbahs').insert(batch);
+      if (error) errorCount += batch.length;
+      else successCount += batch.length;
       setImportProgress(Math.min(i + batchSize, khutbahs.length));
     }
     
     setIsImporting(false);
     setImportComplete(true);
     setImportResults({ success: successCount, errors: errorCount });
+    if (onSuccess) setTimeout(onSuccess, 2000);
   }
 
   return (
     <div className="p-8">
       <h2 className="text-xl font-bold mb-2 text-gray-900">Import Master Excel</h2>
-      <p className="text-gray-600 mb-6">
-        Upload your master spreadsheet to create database entries. Then upload PDFs to match.
-      </p>
+      <p className="text-gray-600 mb-6">Upload your master spreadsheet to create database entries.</p>
 
       {errorMsg && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
@@ -285,103 +101,50 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
           className="border-2 border-dashed border-gray-300 rounded-2xl p-16 text-center hover:border-emerald-500 hover:bg-gray-50 transition-all cursor-pointer group"
           onClick={() => fileInputRef.current?.click()}
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handleExcelUpload}
-            className="hidden"
-          />
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleExcelUpload} className="hidden" />
           <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
              <FileSpreadsheet size={40} />
           </div>
-          <p className="text-xl font-bold text-gray-900">Click to select Excel file</p>
-          <p className="text-gray-500 mt-2">Supports .xlsx and .xls files</p>
+          <p className="text-xl font-bold text-gray-900">Select Excel file</p>
+          <p className="text-gray-400 mt-2 text-sm">Schema: Topic, Speaker, Category, Tags</p>
         </div>
       )}
       
       {showPreview && !importComplete && (
         <div className="animate-in fade-in duration-300">
-          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-             Preview <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full font-bold">{khutbahs.length} khutbahs</span>
-          </h3>
-          
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto border border-gray-200 rounded-xl mb-6 custom-scrollbar">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 sticky top-0 border-b border-gray-200">
                 <tr>
-                  <th className="p-3 text-left font-bold text-gray-500 uppercase text-xs">#</th>
                   <th className="p-3 text-left font-bold text-gray-500 uppercase text-xs">Title</th>
                   <th className="p-3 text-left font-bold text-gray-500 uppercase text-xs">Speaker</th>
-                  <th className="p-3 text-left font-bold text-gray-500 uppercase text-xs">Category</th>
-                  <th className="p-3 text-left font-bold text-gray-500 uppercase text-xs">Duration</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {khutbahs.slice(0, 50).map((k, i) => (
-                  <tr key={i} className="hover:bg-gray-50 transition-colors">
-                    <td className="p-3 text-gray-400">{i + 1}</td>
+                  <tr key={i} className="hover:bg-gray-50">
                     <td className="p-3 font-medium text-gray-900">{k.title}</td>
                     <td className="p-3 text-gray-600">{k.author}</td>
-                    <td className="p-3">
-                      <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold border border-emerald-100">
-                        {k.topic}
-                      </span>
-                    </td>
-                    <td className="p-3 text-gray-500">{k.duration || '-'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          
-          <p className="text-gray-400 text-xs italic mb-6">
-            Showing first 50 of {khutbahs.length} rows
-          </p>
-          
           <div className="flex gap-4">
-            <button
-              onClick={importToDatabase}
-              disabled={isImporting}
-              className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-emerald-200 transition-all"
-            >
-              {isImporting ? (
-                <>
-                  <Loader2 className="animate-spin" size={18} />
-                  Importing... ({importProgress}/{khutbahs.length})
-                </>
-              ) : (
-                `Import All ${khutbahs.length} Khutbahs`
-              )}
+            <button onClick={importToDatabase} disabled={isImporting} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2">
+              {isImporting ? <Loader2 className="animate-spin" size={18} /> : null}
+              Import {khutbahs.length} Khutbahs
             </button>
-            <button
-              onClick={() => {
-                setShowPreview(false);
-                setKhutbahs([]);
-              }}
-              className="bg-gray-100 px-8 py-3 rounded-xl font-bold text-gray-600 hover:bg-gray-200 transition-colors"
-            >
-              Cancel
-            </button>
+            <button onClick={() => { setShowPreview(false); setKhutbahs([]); }} className="bg-gray-100 px-8 py-3 rounded-xl font-bold text-gray-600">Cancel</button>
           </div>
         </div>
       )}
       
       {importComplete && (
-        <div className="p-8 bg-emerald-50 rounded-2xl border border-emerald-100 animate-in zoom-in duration-300">
+        <div className="p-8 bg-emerald-50 rounded-2xl border border-emerald-100">
           <h4 className="font-bold text-emerald-900 text-2xl mb-2 flex items-center gap-2"><CheckCircle className="text-emerald-600"/> Import Complete!</h4>
-          <p className="text-emerald-800 mb-6 text-lg">
-            <span className="font-bold">{importResults.success}</span> khutbahs imported successfully.
-            {importResults.errors > 0 && (
-              <span className="text-red-600 ml-2 font-bold">
-                ({importResults.errors} errors)
-              </span>
-            )}
-          </p>
-          <div className="flex gap-4">
-             <button onClick={onSuccess} className="bg-white text-emerald-700 border border-emerald-200 px-6 py-3 rounded-xl font-bold hover:bg-emerald-100">View Library</button>
-             {/* Note: The user can manually switch tab if they want to proceed to PDF upload */}
-          </div>
+          <p className="text-emerald-800">Success: {importResults.success} | Errors: {importResults.errors}</p>
+          <button onClick={onSuccess} className="mt-6 bg-white text-emerald-700 border border-emerald-200 px-6 py-3 rounded-xl font-bold">View Library</button>
         </div>
       )}
     </div>
@@ -391,327 +154,327 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
 // --- PDF Upload Section ---
 const PdfUploadSection = () => {
   const [files, setFiles] = useState<File[]>([]);
+  const [authors, setAuthors] = useState<string[]>([]);
+  const [selectedAuthor, setSelectedAuthor] = useState<string>('');
   const [matchResults, setMatchResults] = useState<Record<number, any>>({});
   const [uploadProgress, setUploadProgress] = useState<Record<number, string>>({});
   const [isUploading, setIsUploading] = useState(false);
+  const [currentFileIndex, setCurrentFileIndex] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Parse filename to get speaker and title
-  function parseFilename(filename: string) {
-    const nameWithoutExt = filename.replace('.pdf', '');
-    
-    // Pattern: Number_Speaker_Title
-    const pattern1 = /^(\d+)_([^_]+)_(.+)$/;
-    const match1 = nameWithoutExt.match(pattern1);
-    if (match1) {
-      return { speaker: match1[2].trim(), title: match1[3].trim() };
+  useEffect(() => {
+    fetchUniqueAuthors();
+  }, []);
+
+  async function fetchUniqueAuthors() {
+    const { data } = await supabase.from('khutbahs').select('author').not('author', 'is', null);
+    if (data) {
+        const unique = Array.from(new Set(data.map(i => i.author))).filter(Boolean).sort() as string[];
+        setAuthors(unique);
     }
-    
-    // Pattern: Speaker_Title
-    const pattern2 = /^([^_]+)_(.+)$/;
-    const match2 = nameWithoutExt.match(pattern2);
-    if (match2) {
-      return { speaker: match2[1].trim(), title: match2[2].trim() };
-    }
-    
-    return { speaker: 'Unknown', title: nameWithoutExt.trim() };
   }
 
-  // Find matching database entry
-  async function findMatch(speaker: string, title: string) {
-    // Clean the title for matching (remove punctuation, lowercase)
-    const cleanTitle = title
-      .toLowerCase()
-      .replace(/[?!.,'":\-]/g, '')  // Remove punctuation
-      .replace(/\s+/g, ' ')          // Normalize spaces
+  async function findMatchingKhutbah(fileName: string, author: string) {
+    if (!author) return null;
+    
+    // Clean the filename
+    const cleanTitle = fileName
+      .replace(/^\d+_/, '')              // Remove leading numbers
+      .replace(/_/g, ' ')                // Replace underscores
+      .replace(/\.pdf$/i, '')            // Remove .pdf
+      .replace(new RegExp(author, 'gi'), '') // Remove author name if in filename
+      .replace(/\s+/g, ' ')              // Normalize spaces
       .trim();
     
-    // Get all khutbahs without file_url that match the speaker
-    const { data: candidates } = await supabase
+    if (!cleanTitle) return null;
+
+    // Search ONLY this author's khutbahs
+    const { data: matches } = await supabase
       .from('khutbahs')
-      .select('id, title, author')
-      .ilike('author', `%${speaker}%`)
-      .is('file_url', null);
+      .select('*')
+      .eq('author', author)
+      .ilike('title', `%${cleanTitle}%`);
     
-    // If no candidates found with speaker filter, try searching all records
-    if (!candidates || candidates.length === 0) {
-      // Try without speaker filter
-      const { data: allCandidates } = await supabase
-        .from('khutbahs')
-        .select('id, title, author')
-        .is('file_url', null);
-      
-      if (!allCandidates) return null;
-      
-      // Find best title match in all candidates
-      const match = allCandidates.find((k: any) => {
-        const dbTitle = k.title
-          .toLowerCase()
-          .replace(/[?!.,'":\-]/g, '')
-          .replace(/\s+/g, ' ')
-          .trim();
-        return dbTitle === cleanTitle || dbTitle.includes(cleanTitle) || cleanTitle.includes(dbTitle);
-      });
-      
-      return match || null;
-    }
-    
-    // Find best title match from speaker candidates
-    const match = candidates.find((k: any) => {
-      const dbTitle = k.title
-        .toLowerCase()
-        .replace(/[?!.,'":\-]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      // Exact match after cleaning
-      if (dbTitle === cleanTitle) return true;
-      
-      // One contains the other
-      if (dbTitle.includes(cleanTitle) || cleanTitle.includes(dbTitle)) return true;
-      
-      return false;
-    });
-    
-    return match || null;
+    return matches && matches.length > 0 ? matches[0] : null;
   }
 
-  // When files are selected, find matches
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const selectedFiles = Array.from(e.target.files) as File[];
-    setFiles(selectedFiles);
+    const startIdx = files.length;
+    setFiles(prev => [...prev, ...selectedFiles]);
     
-    // Find matches for each file
-    const matches: Record<number, any> = {};
+    // Auto-match for newly selected files
+    const newMatches: Record<number, any> = { ...matchResults };
     for (let i = 0; i < selectedFiles.length; i++) {
-      const parsed = parseFilename(selectedFiles[i].name);
-      const match = await findMatch(parsed.speaker, parsed.title);
-      matches[i] = match;
+        newMatches[startIdx + i] = await findMatchingKhutbah(selectedFiles[i].name, selectedAuthor);
     }
-    setMatchResults(matches);
-  }
+    setMatchResults(newMatches);
+  };
 
-  // Upload and update existing rows
-  async function uploadAllFiles() {
+  useEffect(() => {
+    async function reMatch() {
+        if (files.length > 0 && selectedAuthor) {
+            const matches: Record<number, any> = {};
+            for (let i = 0; i < files.length; i++) {
+                matches[i] = await findMatchingKhutbah(files[i].name, selectedAuthor);
+            }
+            setMatchResults(matches);
+        }
+    }
+    reMatch();
+  }, [selectedAuthor]);
+
+  async function processAllFiles() {
+    if (!selectedAuthor) return;
     setIsUploading(true);
+    setCurrentFileIndex(0);
     
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const match = matchResults[i];
-      
-      if (!match) {
-        setUploadProgress(prev => ({ ...prev, [i]: 'no-match' }));
-        continue;
-      }
+      setCurrentFileIndex(i + 1);
       
       try {
-        setUploadProgress(prev => ({ ...prev, [i]: 'uploading' }));
-        
-        // Create folder from speaker name
-        const parsed = parseFilename(file.name);
-        const folderName = parsed.speaker.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        
-        // Clean filename for storage (remove special characters)
-        const cleanFilename = file.name
-          .replace(/['']/g, "'")  // Normalize apostrophes
-          .replace(/[^\w\s\-_.]/g, '');  // Remove special chars except basic ones
+        setUploadProgress(prev => ({ ...prev, [i]: 'Uploading...' }));
+        const safeAuthor = selectedAuthor.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        const storagePath = `${safeAuthor}/${Date.now()}_${file.name.replace(/[^\w\s\-_.]/g, '')}`;
+        const { error: uploadError } = await supabase.storage.from('khutbahs').upload(storagePath, file, { upsert: true });
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from('khutbahs').getPublicUrl(storagePath);
 
-        const filePath = `${folderName}/${cleanFilename}`;
-        
-        // Upload to storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('khutbahs')
-          .upload(filePath, file, { 
-            upsert: true,
-            contentType: 'application/pdf'
-          });
-        
-        if (uploadError) {
-          throw new Error(`Storage error: ${uploadError.message}`);
+        setUploadProgress(prev => ({ ...prev, [i]: 'Extracting text...' }));
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve) => {
+            reader.onload = () => resolve((reader.result as string).split(',')[1]);
+            reader.readAsDataURL(file);
+        });
+        const base64 = await base64Promise;
+        const extractRes = await fetch('/api/extract-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64 })
+        });
+        const extractData = await extractRes.json();
+        if (!extractRes.ok) throw new Error(extractData.error);
+        const rawText = extractData.text;
+
+        setUploadProgress(prev => ({ ...prev, [i]: 'Formatting...' }));
+        const formatRes = await fetch('/api/process-khutbah', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: rawText, type: 'format' })
+        });
+        const formatData = await formatRes.json();
+        if (!formatRes.ok) throw new Error(formatData.error);
+        const formattedHtml = formatData.result;
+
+        await new Promise(r => setTimeout(r, 1000));
+
+        setUploadProgress(prev => ({ ...prev, [i]: 'Cards...' }));
+        const cardsRes = await fetch('/api/process-khutbah', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: formattedHtml, type: 'cards' })
+        });
+        const cardsData = await cardsRes.json();
+        if (!cardsRes.ok) throw new Error(cardsData.error);
+        const cards = JSON.parse(cardsData.result.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+
+        let khutbahId: string;
+        if (match) {
+          khutbahId = match.id;
+          const { error: upErr } = await supabase.from('khutbahs').update({ 
+              content: formattedHtml,
+              extracted_text: formattedHtml,
+              file_url: publicUrl,
+              file_path: storagePath
+          }).eq('id', khutbahId);
+          if (upErr) throw upErr;
+        } else {
+          const { data: newKhutbah, error: createError } = await supabase.from('khutbahs').insert({
+              title: file.name.replace('.pdf', '').replace(/_/g, ' '),
+              author: selectedAuthor,
+              content: formattedHtml,
+              extracted_text: formattedHtml,
+              file_url: publicUrl,
+              file_path: storagePath,
+              rating: 4.8,
+              likes_count: 0
+          }).select().single();
+          if (createError) throw createError;
+          khutbahId = newKhutbah.id;
         }
-        
-        // Get public URL
-        const { data: urlData } = supabase.storage
-          .from('khutbahs')
-          .getPublicUrl(filePath);
-        
-        // UPDATE existing row (not insert)
-        const { error: dbError } = await supabase
-          .from('khutbahs')
-          .update({ 
-            file_path: filePath,
-            file_url: urlData.publicUrl 
-          })
-          .eq('id', match.id);
-        
-        if (dbError) {
-             throw dbError;
-        }
-        
-        setUploadProgress(prev => ({ ...prev, [i]: 'done' }));
+
+        await supabase.from('khutbah_cards').delete().eq('khutbah_id', khutbahId);
+        const cardsWithId = cards.map((card: any) => ({ ...card, khutbah_id: khutbahId }));
+        await supabase.from('khutbah_cards').insert(cardsWithId);
+
+        setUploadProgress(prev => ({ ...prev, [i]: 'Done!' }));
+        await new Promise(r => setTimeout(r, 1000));
         
       } catch (error: any) {
-        console.error(`Error uploading ${file.name}:`, error);
-        
-        // Show the actual error message to user
-        alert(`Error uploading ${file.name}: ${error.message || JSON.stringify(error)}`);
-        
-        setUploadProgress(prev => ({ ...prev, [i]: 'error' }));
+        setUploadProgress(prev => ({ ...prev, [i]: 'Error: ' + error.message }));
       }
     }
-    
     setIsUploading(false);
   }
 
+  const matchedCount = Object.values(matchResults).filter(m => m).length;
+  const newCount = files.length - matchedCount;
+
   return (
     <div className="p-8">
-      <h2 className="text-xl font-bold mb-2 text-gray-900">Upload PDFs</h2>
-      <p className="text-gray-600 mb-6">
-        Upload PDF files to match with existing database entries.
-      </p>
+      <h2 className="text-xl font-bold mb-4 text-gray-900">Upload & Process PDFs</h2>
       
-      {/* Drag and drop zone */}
-      <div 
-        className="border-2 border-dashed border-gray-300 rounded-2xl p-16 text-center hover:border-emerald-500 hover:bg-gray-50 transition-all cursor-pointer group"
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".pdf"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
-        <div className="w-20 h-20 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 group-hover:bg-emerald-50 group-hover:text-emerald-600 transition-all">
-           <FileText size={40} />
+      <div className="mb-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+              <User size={16} className="text-emerald-600"/> Select Author
+            </label>
+            <select 
+              value={selectedAuthor}
+              onChange={(e) => setSelectedAuthor(e.target.value)}
+              className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+            >
+              <option value="">-- Choose Author --</option>
+              {authors.map(a => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+             <p className="text-xs text-gray-400 mt-8">Matching logic: Author → Filename → Database Title</p>
+          </div>
         </div>
-        <p className="text-xl font-bold text-gray-900">Drop PDFs here or click to browse</p>
-        <p className="text-gray-500 mt-2">Select multiple files at once</p>
       </div>
-      
-      {/* File list with match status */}
-      {files.length > 0 && (
-        <div className="mt-8 animate-in fade-in slide-in-from-bottom-4">
-          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">Files to Upload <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">{files.length}</span></h3>
-          
-          <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white shadow-sm mb-6 max-h-[500px] overflow-y-auto custom-scrollbar">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
-                <tr>
-                  <th className="p-4 text-left font-bold text-gray-500 uppercase text-xs">File</th>
-                  <th className="p-4 text-left font-bold text-gray-500 uppercase text-xs">Parsed Speaker</th>
-                  <th className="p-4 text-left font-bold text-gray-500 uppercase text-xs">Parsed Title</th>
-                  <th className="p-4 text-left font-bold text-gray-500 uppercase text-xs">Database Match</th>
-                  <th className="p-4 text-left font-bold text-gray-500 uppercase text-xs">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {files.map((file, index) => {
-                  const parsed = parseFilename(file.name);
-                  const match = matchResults[index];
-                  const status = uploadProgress[index];
-                  
-                  return (
-                    <tr key={index} className="hover:bg-gray-50 transition-colors">
-                      <td className="p-4 text-xs text-gray-600 font-medium max-w-[200px] truncate flex items-center gap-2">
-                        <File size={14} className="shrink-0 text-gray-400"/> {file.name}
-                      </td>
-                      <td className="p-4 text-gray-700">{parsed.speaker}</td>
-                      <td className="p-4 text-gray-700">{parsed.title}</td>
-                      <td className="p-4">
-                        {match ? (
-                          <span className="text-emerald-600 font-bold flex items-center gap-1.5"><CheckCircle size={14}/> {match.title}</span>
-                        ) : (
-                          <span className="text-red-500 font-bold flex items-center gap-1.5"><X size={14}/> No match</span>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        {status === 'done' && <span className="text-emerald-600 font-bold flex items-center gap-1"><Check size={14}/> Uploaded</span>}
-                        {status === 'uploading' && <span className="text-blue-600 font-bold flex items-center gap-1"><Loader2 size={14} className="animate-spin"/> Uploading...</span>}
-                        {status === 'error' && <span className="text-red-600 font-bold flex items-center gap-1"><AlertCircle size={14}/> Error</span>}
-                        {status === 'no-match' && <span className="text-amber-500 font-bold flex items-center gap-1"><AlertTriangle size={14}/> Skipped</span>}
-                        {!status && match && <span className="text-gray-400 font-medium">Ready</span>}
-                        {!status && !match && <span className="text-gray-300 italic">Will skip</span>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          
-          <div className="flex justify-between items-center bg-gray-50 p-4 rounded-xl border border-gray-200">
-             <div className="text-sm font-medium text-gray-600">
-                <span className="text-emerald-600 font-bold">{Object.values(matchResults).filter(m => m).length}</span> of <span className="font-bold">{files.length}</span> files matched to database entries
-             </div>
-             
-             <div className="flex gap-4">
-                <button
-                onClick={() => {
-                    setFiles([]);
-                    setMatchResults({});
-                    setUploadProgress({});
-                }}
-                className="bg-white border border-gray-300 px-6 py-2.5 rounded-lg font-bold text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                Clear
-                </button>
-                <button
-                onClick={uploadAllFiles}
-                disabled={isUploading || Object.values(matchResults).filter(m => m).length === 0}
-                className="bg-emerald-600 text-white px-8 py-2.5 rounded-lg font-bold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-emerald-200 transition-all flex items-center gap-2"
-                >
-                {isUploading ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
-                {isUploading ? 'Uploading...' : 'Upload Matched Files'}
-                </button>
-             </div>
-          </div>
+
+      {!selectedAuthor ? (
+        <div className="text-center py-16 bg-white rounded-2xl border-2 border-dashed border-gray-200 text-gray-400">
+          <User size={48} className="mx-auto mb-4 opacity-20"/>
+          <p className="text-lg font-medium">Please select an author above to begin</p>
         </div>
+      ) : (
+        <>
+          <div 
+            className="border-2 border-dashed border-emerald-200 rounded-2xl p-12 text-center hover:border-emerald-500 hover:bg-emerald-50 cursor-pointer group transition-all"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input ref={fileInputRef} type="file" multiple accept=".pdf" onChange={handleFileSelect} className="hidden" />
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-all shadow-sm">
+              <FileText size={32} />
+            </div>
+            <p className="font-bold text-gray-900 text-lg">Drop PDFs here or click to browse</p>
+          </div>
+
+          {files.length > 0 && (
+            <div className="mt-8 space-y-6 animate-in fade-in duration-300">
+              <div className="flex justify-between items-end px-2">
+                <h3 className="text-lg font-bold text-gray-900">Upload Preview</h3>
+                <div className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-500">
+                  {matchedCount} matched • {newCount} new
+                </div>
+              </div>
+
+              <div className="overflow-x-auto border border-gray-200 rounded-2xl bg-white shadow-sm max-h-[400px] overflow-y-auto custom-scrollbar">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b sticky top-0">
+                    <tr>
+                      <th className="p-4 text-left font-bold text-gray-500 uppercase text-xs">File Name</th>
+                      <th className="p-4 text-left font-bold text-gray-500 uppercase text-xs">Action</th>
+                      <th className="p-4 text-left font-bold text-gray-500 uppercase text-xs">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {files.map((file, index) => {
+                      const match = matchResults[index];
+                      const status = uploadProgress[index];
+                      const isCurrent = isUploading && currentFileIndex === (index + 1);
+                      return (
+                        <tr key={index} className={`hover:bg-gray-50 ${isCurrent ? 'bg-emerald-50/50' : ''}`}>
+                          <td className="p-4 text-xs font-medium truncate max-w-[200px]">{file.name}</td>
+                          <td className="p-4">
+                            {match ? (
+                              <span className="text-emerald-600 font-bold flex items-center gap-1.5"><CheckCircle size={14}/> Will update: {match.title}</span>
+                            ) : (
+                              <span className="text-blue-600 font-bold flex items-center gap-1.5"><Plus size={14}/> Will create new</span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <span className={`font-bold flex items-center gap-2 ${status?.includes('Error') ? 'text-red-500' : status === 'Done!' ? 'text-emerald-600' : 'text-blue-600'}`}>
+                              {status && !status.includes('Done') && !status.includes('Error') && <Loader2 size={14} className="animate-spin"/>}
+                              {status === 'Done!' && <Check size={16}/>}
+                              {status || 'Ready'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {isUploading && (
+                <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-bold text-emerald-900">Total Progress</span>
+                    <span className="text-sm font-black text-emerald-600">{Math.round((currentFileIndex / files.length) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-emerald-200 rounded-full h-3 overflow-hidden">
+                    <div 
+                      className="bg-emerald-600 h-full transition-all duration-500"
+                      style={{ width: `${(currentFileIndex / files.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-4 pt-4">
+                <button 
+                  onClick={() => { setFiles([]); setUploadProgress({}); setMatchResults({}); }} 
+                  className="bg-white border border-gray-300 px-8 py-3 rounded-xl font-bold text-gray-600 hover:bg-gray-50"
+                  disabled={isUploading}
+                >
+                  Clear All
+                </button>
+                <button 
+                  onClick={processAllFiles} 
+                  disabled={isUploading || files.length === 0} 
+                  className="bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all"
+                >
+                  {isUploading ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
+                  Process {files.length} PDFs
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 };
 
-
-// --- Main Component ---
 export const KhutbahUpload: React.FC<KhutbahUploadProps> = ({ onSuccess }) => {
-  const [mode, setMode] = useState<'pdf' | 'excel'>('excel');
+  const [mode, setMode] = useState<'pdf' | 'excel'>('pdf');
 
   return (
     <div className="flex h-screen md:pl-20 bg-gray-50 overflow-hidden">
       <div className="flex-1 overflow-y-auto">
          <div className="max-w-6xl mx-auto p-8 xl:p-12">
-            <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-900">Bulk Upload Manager</h2>
-                  <p className="text-gray-500 mt-1">Manage your khutbah library via bulk import.</p>
-                </div>
+            <div className="mb-8">
+              <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Bulk Upload Manager</h2>
+              <p className="text-gray-500 mt-2 text-lg">Match PDFs to Authors and process via AI.</p>
             </div>
 
-            {/* Toggle */}
-            <div className="flex p-1.5 bg-gray-200/60 rounded-xl w-fit mb-8 border border-gray-200">
-                <button
-                    onClick={() => setMode('excel')}
-                    className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'excel' ? 'bg-white text-emerald-700 shadow-sm ring-1 ring-gray-100' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
-                >
-                    <FileSpreadsheet size={18} /> Import Excel
-                </button>
-                <button
-                    onClick={() => setMode('pdf')}
-                    className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${mode === 'pdf' ? 'bg-white text-emerald-700 shadow-sm ring-1 ring-gray-100' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
-                >
-                    <FileText size={18} /> Upload PDFs
-                </button>
+            <div className="flex p-1 bg-gray-200/60 rounded-2xl w-fit mb-10 border border-gray-200">
+                <button onClick={() => setMode('pdf')} className={`px-8 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mode === 'pdf' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500'}`}><FileText size={18}/> PDF Upload & AI</button>
+                <button onClick={() => setMode('excel')} className={`px-8 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mode === 'excel' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500'}`}><FileSpreadsheet size={18}/> Excel Import</button>
             </div>
 
-            <div className="bg-white rounded-[2rem] border border-gray-200 shadow-sm overflow-hidden min-h-[600px]">
+            <div className="bg-white rounded-[2.5rem] border border-gray-200 shadow-xl shadow-gray-200/50 overflow-hidden min-h-[600px]">
                 {mode === 'excel' ? <ExcelImportSection onSuccess={onSuccess} /> : <PdfUploadSection />}
             </div>
-
-            {/* New Process Existing Section */}
-            <ProcessSection />
          </div>
       </div>
     </div>

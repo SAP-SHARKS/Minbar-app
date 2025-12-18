@@ -1,10 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 export default async function handler(req, res) {
-  // Debugging environment variables
-  console.log('GEMINI_API_KEY exists:', !!process.env.GEMINI_API_KEY);
-  console.log('All env vars:', Object.keys(process.env));
-
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -14,25 +10,15 @@ export default async function handler(req, res) {
 
   const { content, type } = req.body;
   
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ 
-      error: 'Missing GEMINI_API_KEY',
-      availableEnvVars: Object.keys(process.env)
-    });
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
+  // Use the API_KEY directly from environment
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
-    // Use gemini-1.5-flash for compatibility with this SDK version
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    
     let prompt;
-    let generationConfig = {};
+    let config = {};
     
     if (type === 'format') {
-      prompt = `Convert this khutbah into clean HTML.
+      prompt = `Convert this khutbah into clean, professional HTML.
       Rules:
       - Title: <h1>
       - Sections: <h2>  
@@ -40,28 +26,29 @@ export default async function handler(req, res) {
       - Arabic: <p class="arabic" dir="rtl">
       - Quran: <blockquote class="quran">
       - Hadith: <blockquote class="hadith">
-      Return ONLY HTML, no markdown code blocks.
+      - Author line if present: <p class="author">
+      Return ONLY clean HTML content, no markdown wrappers.
       
-      KHUTBAH: ${content}`;
+      RAW TEXT: ${content}`;
     } else if (type === 'cards') {
-      prompt = `Create 10-15 summary cards as JSON array.
-      Each: { card_number, section_label (INTRO/MAIN/HADITH/QURAN/STORY/PRACTICAL/CLOSING), title, bullet_points (array of strings), arabic_text, key_quote, quote_source, time_estimate_seconds }
-      Return ONLY valid JSON array, no markdown.
+      prompt = `Create a structured summary of the following khutbah as a JSON array of cards.
+      Each card object must have: { card_number, section_label (INTRO/MAIN/HADITH/QURAN/STORY/PRACTICAL/CLOSING), title, bullet_points (array of strings), arabic_text (if any), key_quote (if any), quote_source (if any), time_estimate_seconds (integer) }
+      Return ONLY a valid JSON array.
       
       KHUTBAH: ${content}`;
       
-      generationConfig = {
+      config = {
           responseMimeType: 'application/json'
       };
     }
     
-    const result = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config
     });
     
-    const text = result.response.text();
-    return res.status(200).json({ result: text });
+    return res.status(200).json({ result: response.text });
   } catch (error) {
     console.error('Gemini API Error:', error);
     return res.status(500).json({ error: error.message });
