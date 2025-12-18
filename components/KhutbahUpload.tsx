@@ -11,6 +11,35 @@ interface KhutbahUploadProps {
   onSuccess: () => void;
 }
 
+// Robust fetch helper that handles JSON or Text errors
+const fetchApi = async (url: string, body: any) => {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      let errorInfo = `Server Error (${response.status})`;
+      try {
+        const data = await response.json();
+        errorInfo = data.error || data.message || errorInfo;
+        if (data.stack) console.error('[Server Stack]:', data.stack);
+      } catch (e) {
+        const text = await response.text();
+        errorInfo = text || errorInfo;
+      }
+      throw new Error(errorInfo);
+    }
+
+    return await response.json();
+  } catch (err: any) {
+    console.error(`[fetchApi] Failed at ${url}:`, err);
+    throw err;
+  }
+};
+
 // --- Excel Import Section ---
 const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
   const [khutbahs, setKhutbahs] = useState<any[]>([]);
@@ -60,7 +89,6 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
 
       const mapped = validRows.map(row => ({
         title: String(row['Topic'] || '').trim(),
-        // Save BOTH imam_id and author name
         imam_id: selectedImamId || null,
         author: selectedImam ? selectedImam.name : String(row['Speaker'] || 'Unknown').trim(),
         topic: String(row['Category'] || 'General').trim(),
@@ -88,9 +116,10 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
     
     for (let i = 0; i < khutbahs.length; i += batchSize) {
       const batch = khutbahs.slice(i, i + batchSize);
+      console.log(`[Upload] Inserting batch ${i/batchSize + 1}...`);
       const { error } = await supabase.from('khutbahs').insert(batch);
       if (error) {
-        console.error("Batch error:", error);
+        console.error("[Upload] Batch insert error:", error);
         errorCount += batch.length;
       }
       else successCount += batch.length;
@@ -196,7 +225,6 @@ const PdfUploadSection = () => {
   }, []);
 
   async function fetchImams() {
-    // Dropdown MUST come from imams table only
     const { data, error } = await supabase
       .from('imams')
       .select('*')
@@ -212,17 +240,15 @@ const PdfUploadSection = () => {
   async function findMatchingKhutbah(fileName: string, imamId: string) {
     if (!imamId) return null;
     
-    // Clean the filename
     const cleanTitle = fileName
-      .replace(/^\d+_/, '')              // Remove leading numbers
-      .replace(/_/g, ' ')                // Replace underscores
-      .replace(/\.pdf$/i, '')            // Remove .pdf
-      .replace(/\s+/g, ' ')              // Normalize spaces
+      .replace(/^\d+_/, '')
+      .replace(/_/g, ' ')
+      .replace(/\.pdf$/i, '')
+      .replace(/\s+/g, ' ')
       .trim();
     
     if (!cleanTitle) return null;
 
-    // Search ONLY this selected imam's khutbahs
     const { data: matches } = await supabase
       .from('khutbahs')
       .select('*')
@@ -238,7 +264,6 @@ const PdfUploadSection = () => {
     const startIdx = files.length;
     setFiles(prev => [...prev, ...selectedFiles]);
     
-    // Auto-match for newly selected files
     const newMatches: Record<number, any> = { ...matchResults };
     for (let i = 0; i < selectedFiles.length; i++) {
         newMatches[startIdx + i] = await findMatchingKhutbah(selectedFiles[i].name, selectedImamId);
@@ -273,12 +298,17 @@ const PdfUploadSection = () => {
       setCurrentFileIndex(i + 1);
       
       try {
+        console.log(`[Upload] Starting process for ${file.name}...`);
         setUploadProgress(prev => ({ ...prev, [i]: 'Uploading...' }));
+        
         const safeImamName = selectedImam.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
         const storagePath = `${safeImamName}/${Date.now()}_${file.name.replace(/[^\w\s\-_.]/g, '')}`;
+        
         const { error: uploadError } = await supabase.storage.from('khutbahs').upload(storagePath, file, { upsert: true });
         if (uploadError) throw uploadError;
+        
         const { data: { publicUrl } } = supabase.storage.from('khutbahs').getPublicUrl(storagePath);
+        console.log(`[Upload] File uploaded to: ${publicUrl}`);
 
         setUploadProgress(prev => ({ ...prev, [i]: 'Extracting text...' }));
         const reader = new FileReader();
@@ -287,58 +317,22 @@ const PdfUploadSection = () => {
             reader.readAsDataURL(file);
         });
         const base64 = await base64Promise;
-        const extractRes = await fetch('/api/extract-pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ base64 })
-        });
-        const extractData = await extractRes.json();
-        if (!extractRes.ok) throw new Error(extractData.error);
+        
+        const extractData = await fetchApi('/api/extract-pdf', { base64, fileName: file.name });
         const rawText = extractData.text;
+        console.log(`[Upload] Text extracted. Length: ${rawText?.length}`);
 
-        setUploadProgress(prev => ({ ...prev, [i]: 'Formatting...' }));
-        const formatRes = await fetch('/api/process-khutbah', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: rawText, type: 'format' })
-        });
-        const formatData = await formatRes.json();
-        if (!formatRes.ok) throw new Error(formatData.error);
-        const formattedHtml = formatData.result;
-
-        await new Promise(r => setTimeout(r, 1000));
-
-        setUploadProgress(prev => ({ ...prev, [i]: 'Cards...' }));
-        const cardsRes = await fetch('/api/process-khutbah', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: formattedHtml, type: 'cards' })
-        });
-        const cardsData = await cardsRes.json();
-        if (!cardsRes.ok) throw new Error(cardsData.error);
-        const cards = JSON.parse(cardsData.result.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
-
+        // Handle DB entry first if it doesn't exist
         let khutbahId: string;
         if (match) {
           khutbahId = match.id;
-          const { error: upErr } = await supabase.from('khutbahs').update({ 
-              content: formattedHtml,
-              extracted_text: formattedHtml,
-              file_url: publicUrl,
-              file_path: storagePath,
-              // Save BOTH imam_id and author name
-              imam_id: selectedImamId,
-              author: selectedImam.name
-          }).eq('id', khutbahId);
-          if (upErr) throw upErr;
         } else {
+          console.log(`[Upload] Creating temporary database entry for processing...`);
           const { data: newKhutbah, error: createError } = await supabase.from('khutbahs').insert({
               title: file.name.replace('.pdf', '').replace(/_/g, ' '),
-              // Save BOTH imam_id and author name
               imam_id: selectedImamId,
               author: selectedImam.name,
-              content: formattedHtml,
-              extracted_text: formattedHtml,
+              content: 'Processing...',
               file_url: publicUrl,
               file_path: storagePath,
               rating: 4.8,
@@ -348,15 +342,34 @@ const PdfUploadSection = () => {
           khutbahId = newKhutbah.id;
         }
 
-        await supabase.from('khutbah_cards').delete().eq('khutbah_id', khutbahId);
-        const cardsWithId = cards.map((card: any) => ({ ...card, khutbah_id: khutbahId }));
-        await supabase.from('khutbah_cards').insert(cardsWithId);
+        setUploadProgress(prev => ({ ...prev, [i]: 'Formatting with AI...' }));
+        // API now handles server-side Supabase update because we pass khutbahId
+        const formatData = await fetchApi('/api/process-khutbah', { 
+            content: rawText, 
+            type: 'format',
+            khutbahId: khutbahId,
+            fileUrl: publicUrl
+        });
+        const formattedHtml = formatData.result;
+        console.log(`[Upload] HTML formatted and saved to database.`);
+
+        await new Promise(r => setTimeout(r, 1000));
+
+        setUploadProgress(prev => ({ ...prev, [i]: 'Generating summary...' }));
+        // API now handles card generation and update server-side
+        await fetchApi('/api/process-khutbah', { 
+            content: formattedHtml, 
+            type: 'cards',
+            khutbahId: khutbahId
+        });
+        console.log(`[Upload] Summary cards generated and saved.`);
 
         setUploadProgress(prev => ({ ...prev, [i]: 'Done!' }));
-        await new Promise(r => setTimeout(r, 1000));
+        console.log(`[Upload] Finished processing ${file.name}`);
         
       } catch (error: any) {
-        setUploadProgress(prev => ({ ...prev, [i]: 'Error: ' + error.message }));
+        console.error(`[Upload] Failed to process ${file.name}:`, error);
+        setUploadProgress(prev => ({ ...prev, [i]: 'Error: ' + (error.message || 'Processing failed') }));
       }
     }
     setIsUploading(false);
