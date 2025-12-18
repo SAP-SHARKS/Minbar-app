@@ -147,7 +147,13 @@ export const LearningSection = ({ user }: { user: any }) => {
                 <div className={`h-48 md:h-64 ${resource.color} relative flex items-center justify-center`}>
                    <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                    <div className="w-16 md:w-20 h-16 md:h-20 bg-white rounded-full flex items-center justify-center shadow-md transform group-hover:scale-110 transition-transform duration-300 text-gray-800">
-                      {resource.type === 'video' ? <Play size={28} md:size={32} className="ml-1" fill="currentColor"/> : <FileText size={28} md:size={32} />}
+           {resource.type === "video" ? (
+  <Play className="ml-1 w-7 h-7 md:w-8 md:h-8 fill-current" />
+) : (
+  <FileText className="w-7 h-7 md:w-8 md:h-8" />
+)}
+
+}
                    </div>
                    <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-md text-white text-xs md:text-sm font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
                       {resource.type === 'video' ? <Clock size={14}/> : <BookOpen size={14}/>}
