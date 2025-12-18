@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileSpreadsheet, FileText, CheckCircle, AlertCircle, 
-  Loader2, UploadCloud, Plus, Check, User, ExternalLink, AlertTriangle
+  Loader2, UploadCloud, Plus, Check, User, ExternalLink, AlertTriangle, Info
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import * as XLSX from 'xlsx';
@@ -43,8 +43,8 @@ const fetchApi = async (url: string, body: any) => {
 const isValidUrl = (url: string) => {
   try {
     if (!url) return false;
-    new URL(url);
-    return true;
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
   } catch (e) {
     return false;
   }
@@ -59,7 +59,7 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importComplete, setImportComplete] = useState(false);
-  const [importResults, setImportResults] = useState({ success: 0, errors: 0 });
+  const [importResults, setImportResults] = useState({ success: 0, skipped: 0, errors: 0 });
   const [errorMsg, setErrorMsg] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -80,231 +80,339 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
       setErrorMsg('');
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
-      let sheet = workbook.Sheets['Detail Cheklist'] || workbook.Sheets[workbook.SheetNames[0]];
+      
+      let sheetName = workbook.SheetNames.find(n => n.includes('Detail Cheklist')) || workbook.SheetNames[0];
+      let sheet = workbook.Sheets[sheetName];
       
       if (!sheet) {
-          setErrorMsg('Could not find any sheets in the Excel file.');
+          setErrorMsg('Could not find a valid sheet in the Excel file.');
           return;
       }
       
-      const rows: any[] = XLSX.utils.sheet_to_json(sheet);
-      if (rows.length === 0) {
-        setErrorMsg('The Excel file appears to be empty.');
+      const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      
+      if (rawRows.length < 2) {
+        setErrorMsg('The Excel file appears to be empty or missing data rows.');
         return;
       }
 
-      console.log('[Import] Headers detected:', Object.keys(rows[0]));
-
+      const dataRows = rawRows.slice(1);
       const selectedImam = imams.find(i => i.id === selectedImamId);
 
-      const mapped = rows.map((row, index) => {
-        // Tag Logic: split by comma, trim, remove empty, dedupe
-        const tagsRaw = row['Tags'] || '';
-        let tagsParsed = String(tagsRaw)
-          .split(',')
-          .map(t => t.trim())
-          .filter(t => t.length > 0);
-        
-        tagsParsed = [...new Set(tagsParsed)]; // Dedupe
-        
-        if (tagsRaw && tagsParsed.length === 0) {
-          console.warn(`[Import] Row ${index + 2}: Raw tags existed ("${tagsRaw}") but resulted in an empty list after parsing.`);
-        }
+      console.log(`[Import] Initial processing of ${dataRows.length} rows.`);
 
+      const mapped = dataRows.map((row, index) => {
+        const speakerRaw = row[2]; // Column C
+        const topicRaw = row[3];   // Column D
+        const youtubeRaw = row[4]; // Column E
+        const durationRaw = row[5];// Column F
+        const tagsRaw = row[6];    // Column G
+
+        let tagsParsed: string[] = [];
+        if (tagsRaw) {
+          tagsParsed = String(tagsRaw)
+            .split(/[,;]/)
+            .map(t => t.trim())
+            .filter(t => t.length > 0);
+          tagsParsed = [...new Set(tagsParsed)];
+        }
+        
         const finalTags = tagsParsed.length > 0 ? tagsParsed : ['General'];
-        const topic = String(row['Topic'] || '').trim();
-        const youtubeUrl = row['Youtube link'] ? String(row['Youtube link']).trim() : '';
+        const topic = String(topicRaw || '').trim();
+        const youtubeUrl = String(youtubeRaw || '').trim();
 
         const item = {
-          title: topic || 'Untitled Khutbah', // Fallback title
+          title: topic || 'Untitled Khutbah',
           imam_id: selectedImamId || null,
-          author: selectedImam ? selectedImam.name : String(row['Speaker'] || 'Unknown').trim(),
-          topic: topic, // Column D
-          tags: finalTags, // Column G
-          youtube_url: youtubeUrl || null, // Column E
-          duration: row['Duration of khutbah'] ? String(row['Duration of khutbah']).trim() : null, // Column F
+          author: selectedImam ? selectedImam.name : String(speakerRaw || 'Unknown').trim(),
+          topic: topic,
+          tags: finalTags,
+          youtube_url: youtubeUrl || null,
+          duration: durationRaw ? String(durationRaw).trim() : null,
           rating: 4.8,
           likes_count: 0,
           comments_count: 0,
           created_at: new Date().toISOString(),
-          // UI Validation helpers
+          // UI Validation & Duplicate check helpers
           _isValidUrl: youtubeUrl ? isValidUrl(youtubeUrl) : true,
           _tagsDefaulted: tagsParsed.length === 0,
-          _missingTopic: topic === '',
-          _speakerFromFile: String(row['Speaker'] || '').trim()
+          _missingTopic: !topic,
+          _status: 'ready' as 'ready' | 'importing' | 'created' | 'skipped_existing' | 'error'
         };
 
-        // Debug log for first 3 rows
         if (index < 3) {
-          console.log(`[Import Debug] Row ${index + 1}:`, {
-            title: item.title,
-            author: item.author,
-            topic: item.topic,
-            tagsRaw,
-            tagsParsed: finalTags
-          });
+          console.log(`[Import Debug] Data Row ${index + 1}:`, { topic, author: item.author, tagsRaw });
         }
 
         return item;
       });
       
-      // Only filter out rows that have absolutely no core data
-      const filtered = mapped.filter(k => k.topic !== '' || k._speakerFromFile !== '');
-      
+      const filtered = mapped.filter(k => k.topic !== '' || k.author !== 'Unknown');
       setKhutbahs(filtered);
       setShowPreview(true);
     } catch (err: any) {
-        console.error("[Import] Parse error:", err);
-        setErrorMsg("Failed to parse Excel file. Check the console for debug logs.");
+        console.error("[Import] Critical Parse Error:", err);
+        setErrorMsg("Failed to parse Excel file. Ensure it is a valid .xlsx file.");
     }
   }
 
   async function importToDatabase() {
     setIsImporting(true);
-    const batchSize = 50;
+    setErrorMsg('');
+    
     let successCount = 0;
+    let skippedCount = 0;
     let errorCount = 0;
-    
-    for (let i = 0; i < khutbahs.length; i += batchSize) {
-      // Strip UI-only properties before DB insert
-      const batch = khutbahs.slice(i, i + batchSize).map(({ _isValidUrl, _tagsDefaulted, _missingTopic, _speakerFromFile, ...cleanData }) => cleanData);
+
+    try {
+      // 1. Pre-fetch existing metadata to avoid row-by-row queries
+      console.log(`[Import] Fetching existing metadata for deduplication...`);
+      const { data: existing, error: fetchErr } = await supabase
+        .from('khutbahs')
+        .select('youtube_url, title, author');
       
-      console.log(`[Import] Inserting batch ${Math.floor(i/batchSize) + 1}...`);
-      const { error } = await supabase.from('khutbahs').insert(batch);
-      
-      if (error) {
-        console.error("[Import] Batch insert error:", error);
-        errorCount += batch.length;
-      } else {
-        successCount += batch.length;
+      if (fetchErr) throw fetchErr;
+
+      // 2. Build local sets/maps for fast lookup
+      const existingUrls = new Set((existing || []).filter(e => e.youtube_url).map(e => e.youtube_url));
+      const existingTitlesAuthors = new Set((existing || []).map(e => `${e.title.toLowerCase()}|${e.author.toLowerCase()}`));
+
+      // 3. Process the list
+      const toInsert: any[] = [];
+      const updatedKhutbahs = [...khutbahs];
+
+      updatedKhutbahs.forEach((item, idx) => {
+        // PRIORITY 1: Youtube Link
+        if (item.youtube_url && existingUrls.has(item.youtube_url)) {
+          updatedKhutbahs[idx]._status = 'skipped_existing';
+          skippedCount++;
+          return;
+        }
+
+        // PRIORITY 2: Title + Author
+        const key = `${item.title.toLowerCase()}|${item.author.toLowerCase()}`;
+        if (existingTitlesAuthors.has(key)) {
+          updatedKhutbahs[idx]._status = 'skipped_existing';
+          skippedCount++;
+          return;
+        }
+
+        // New record
+        updatedKhutbahs[idx]._status = 'importing';
+        toInsert.push({ index: idx, data: item });
+      });
+
+      // Update UI with initial statuses
+      setKhutbahs(updatedKhutbahs);
+
+      // 4. Batch insert the NEW records
+      const batchSize = 100;
+      for (let i = 0; i < toInsert.length; i += batchSize) {
+        const batch = toInsert.slice(i, i + batchSize);
+        const dataToInsert = batch.map(b => {
+          const { _isValidUrl, _tagsDefaulted, _missingTopic, _status, ...clean } = b.data;
+          return clean;
+        });
+
+        const { error: insErr } = await supabase.from('khutbahs').insert(dataToInsert);
+
+        if (insErr) {
+          console.error("[Import] Batch insert failed:", insErr);
+          batch.forEach(b => { updatedKhutbahs[b.index]._status = 'error'; });
+          errorCount += batch.length;
+        } else {
+          batch.forEach(b => { updatedKhutbahs[b.index]._status = 'created'; });
+          successCount += batch.length;
+        }
+        
+        setImportProgress(Math.min(i + batchSize, toInsert.length));
+        setKhutbahs([...updatedKhutbahs]);
       }
-      setImportProgress(Math.min(i + batchSize, khutbahs.length));
+
+      setImportResults({ success: successCount, skipped: skippedCount, errors: errorCount });
+      setImportComplete(true);
+      if (successCount > 0) setTimeout(onSuccess, 3000);
+
+    } catch (err: any) {
+      console.error("[Import] Import logic failed:", err);
+      setErrorMsg("Import failed: " + (err.message || "Unknown error during database sync."));
+    } finally {
+      setIsImporting(false);
     }
-    
-    setIsImporting(false);
-    setImportComplete(true);
-    setImportResults({ success: successCount, errors: errorCount });
-    if (onSuccess && successCount > 0) setTimeout(onSuccess, 2000);
   }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'created': return <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1"><Check size={10}/> CREATED</span>;
+      case 'skipped_existing': return <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1"><Info size={10}/> SKIPPED</span>;
+      case 'error': return <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1">ERROR</span>;
+      case 'importing': return <span className="text-blue-500 flex items-center gap-1 text-[10px] font-bold animate-pulse">IMPORTING...</span>;
+      default: return null;
+    }
+  };
 
   return (
     <div className="p-8">
       <h2 className="text-xl font-bold mb-2 text-gray-900">Import Master Excel</h2>
-      <p className="text-gray-600 mb-6">Import sermon metadata from spreadsheet columns (Speaker, Topic, Youtube, Duration, Tags).</p>
+      <p className="text-gray-600 mb-6">Targeting columns: C (Speaker), D (Topic), E (Youtube), F (Duration), G (Tags). Duplicates will be skipped automatically.</p>
 
-      <div className="mb-6 max-w-md">
-        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Default Imam for this file</label>
+      <div className="mb-8 max-w-md">
+        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Override Author</label>
         <select 
           value={selectedImamId}
           onChange={(e) => setSelectedImamId(e.target.value)}
-          className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 outline-none"
+          className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-emerald-500 outline-none transition-all shadow-sm"
         >
-          <option value="">-- Use speaker names from file --</option>
+          <option value="">-- Use speaker names found in Column C --</option>
           {imams.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
       </div>
 
       {errorMsg && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2 animate-in fade-in zoom-in duration-200">
             <AlertCircle size={20}/> {errorMsg}
           </div>
       )}
       
       {!showPreview && !importComplete && (
         <div 
-          className="border-2 border-dashed border-gray-300 rounded-2xl p-16 text-center hover:border-emerald-500 hover:bg-gray-50 transition-all cursor-pointer group"
+          className="border-2 border-dashed border-gray-300 rounded-2xl p-20 text-center hover:border-emerald-500 hover:bg-emerald-50/30 transition-all cursor-pointer group"
           onClick={() => fileInputRef.current?.click()}
         >
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleExcelUpload} className="hidden" />
-          <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+          <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform shadow-sm">
              <FileSpreadsheet size={40} />
           </div>
-          <p className="text-xl font-bold text-gray-900">Select Excel file</p>
-          <p className="text-sm text-gray-400 mt-2">Expects columns: Speaker, Topic, Youtube link, Duration of khutbah, Tags</p>
+          <p className="text-xl font-bold text-gray-900">Upload Spreadsheet</p>
+          <p className="text-sm text-gray-400 mt-2">Deduplication will be performed by Youtube Link and (Title + Author).</p>
         </div>
       )}
       
       {showPreview && !importComplete && (
-        <div className="animate-in fade-in duration-300">
+        <div className="animate-in fade-in duration-500">
           <div className="flex justify-between items-center mb-4">
-             <h3 className="font-bold text-gray-700">Previewing {khutbahs.length} entries</h3>
-             <span className="text-xs text-gray-400">Review validation flags before confirming</span>
+             <h3 className="font-bold text-gray-800 text-lg">Batch Preview ({khutbahs.length} entries)</h3>
+             <div className="flex gap-2 text-[10px] font-bold">
+                <span className="bg-emerald-50 text-emerald-600 px-2 py-1 rounded">NEW READY</span>
+                <span className="bg-amber-50 text-amber-600 px-2 py-1 rounded">AUTO-CLEANED</span>
+             </div>
           </div>
-          <div className="overflow-x-auto max-h-[500px] overflow-y-auto border border-gray-200 rounded-xl mb-6 custom-scrollbar bg-white shadow-sm">
-            <table className="w-full text-left">
+          
+          <div className="overflow-x-auto max-h-[550px] overflow-y-auto border border-gray-200 rounded-2xl mb-8 custom-scrollbar bg-white shadow-xl shadow-gray-200/50">
+            <table className="w-full text-left border-collapse">
               <thead className="bg-gray-50 sticky top-0 border-b border-gray-200 z-10">
                 <tr>
-                  <th className="p-3 text-xs font-bold text-gray-500 uppercase">Speaker</th>
-                  <th className="p-3 text-xs font-bold text-gray-500 uppercase">Topic (Title)</th>
-                  <th className="p-3 text-xs font-bold text-gray-500 uppercase">Tags</th>
-                  <th className="p-3 text-xs font-bold text-gray-500 uppercase">Link</th>
-                  <th className="p-3 text-xs font-bold text-gray-500 uppercase">Duration</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Speaker (Col C)</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Topic (Col D)</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Tags (Col G)</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Link (Col E)</th>
+                  <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Duration</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {khutbahs.map((k, i) => (
-                  <tr key={i} className="hover:bg-gray-50 text-sm">
-                    <td className="p-3 font-medium text-gray-900">{k.author}</td>
-                    <td className="p-3">
+                  <tr key={i} className={`hover:bg-gray-50/80 transition-colors ${k._status === 'skipped_existing' ? 'opacity-50' : ''}`}>
+                    <td className="p-4 w-28 shrink-0">{getStatusBadge(k._status)}</td>
+                    <td className="p-4 text-sm font-bold text-gray-900">{k.author}</td>
+                    <td className="p-4">
                       <div className="flex flex-col">
-                        <span className={k._missingTopic ? 'text-red-500 italic' : 'text-gray-900 font-medium'}>
+                        <span className={`text-sm font-medium ${k._missingTopic ? 'text-red-500 italic' : 'text-gray-700'}`}>
                           {k._missingTopic ? 'Missing topic' : k.title}
                         </span>
                       </div>
                     </td>
-                    <td className="p-3">
-                      <div className="flex flex-wrap gap-1 max-w-[200px]">
+                    <td className="p-4">
+                      <div className="flex flex-wrap gap-1 max-w-[240px]">
                         {k.tags.map((t: string, ti: number) => (
-                          <span key={ti} className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100 font-bold uppercase text-[9px]">
+                          <span key={ti} className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-lg border border-emerald-100 font-bold uppercase text-[9px] shadow-sm">
                             {t}
                           </span>
                         ))}
                       </div>
                       {k._tagsDefaulted && (
-                        <div className="text-[10px] text-amber-500 font-bold flex items-center gap-1 mt-1">
-                          <AlertTriangle size={10}/> (will default to General)
+                        <div className="text-[10px] text-amber-600 font-bold flex items-center gap-1 mt-1.5 bg-amber-50 w-fit px-1.5 py-0.5 rounded border border-amber-100">
+                          <AlertTriangle size={10}/> (defaults to General)
                         </div>
                       )}
                     </td>
-                    <td className="p-3">
+                    <td className="p-4">
                       {k.youtube_url ? (
                         <div className="flex flex-col">
-                           <a href={k.youtube_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
-                             <ExternalLink size={12}/> View
+                           <a href={k.youtube_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 font-bold text-xs flex items-center gap-1.5 transition-colors">
+                             <ExternalLink size={12}/> View Video
                            </a>
                            {!k._isValidUrl && (
-                             <span className="text-[10px] text-red-500 font-bold mt-1 flex items-center gap-1">
+                             <span className="text-[10px] text-red-500 font-black mt-1.5 flex items-center gap-1">
                                <AlertCircle size={10}/> Invalid URL
                              </span>
                            )}
                         </div>
-                      ) : <span className="text-gray-300">-</span>}
+                      ) : <span className="text-gray-300">—</span>}
                     </td>
-                    <td className="p-3 text-gray-600 text-xs">{k.duration || '-'}</td>
+                    <td className="p-4 text-gray-500 font-mono text-xs">{k.duration || '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="flex gap-4">
-            <button onClick={importToDatabase} disabled={isImporting} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all">
-              {isImporting ? <Loader2 className="animate-spin" size={18} /> : null}
-              Confirm & Import {khutbahs.length} Khutbahs
+          
+          <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+            <button 
+              onClick={importToDatabase} 
+              disabled={isImporting} 
+              className="bg-emerald-600 text-white px-10 py-4 rounded-xl font-black flex items-center gap-3 shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all transform active:scale-95 disabled:opacity-50"
+            >
+              {isImporting ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20}/>}
+              Perform Duplicate Check & Import
             </button>
-            <button onClick={() => { setShowPreview(false); setKhutbahs([]); }} className="bg-gray-100 px-8 py-3 rounded-xl font-bold text-gray-600 hover:bg-gray-200 transition-colors">Cancel</button>
+            <button 
+                onClick={() => { setShowPreview(false); setKhutbahs([]); }} 
+                className="bg-white border border-gray-200 px-8 py-4 rounded-xl font-bold text-gray-500 hover:bg-gray-100 transition-colors shadow-sm"
+            >
+                Cancel
+            </button>
+            {isImporting && (
+                <div className="flex-1 flex flex-col gap-1">
+                    <div className="flex justify-between text-[10px] font-bold text-gray-500 uppercase tracking-widest px-1">
+                        <span>Database Sync</span>
+                        <span>{Math.round((importProgress / Math.max(1, khutbahs.length)) * 100)}%</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${(importProgress / Math.max(1, khutbahs.length)) * 100}%` }} />
+                    </div>
+                </div>
+            )}
           </div>
         </div>
       )}
       
       {importComplete && (
-        <div className="p-8 bg-emerald-50 rounded-2xl border border-emerald-100 text-center">
-          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-             <CheckCircle size={32} />
+        <div className="p-10 bg-white rounded-[2rem] border border-emerald-100 text-center shadow-2xl animate-in zoom-in duration-300">
+          <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+             <CheckCircle size={40} />
           </div>
-          <h4 className="font-bold text-emerald-900 text-2xl mb-2">Import Process Finished</h4>
-          <p className="text-emerald-800 font-medium">Successfully added {importResults.success} records.</p>
-          {importResults.errors > 0 && <p className="text-red-600 mt-2 font-bold">Failed to insert {importResults.errors} records.</p>}
-          <button onClick={onSuccess} className="mt-8 bg-white text-emerald-700 border border-emerald-200 px-8 py-3 rounded-xl font-bold shadow-sm hover:shadow-md transition-all">Back to Library</button>
+          <h4 className="font-bold text-gray-900 text-3xl mb-3">Sync Complete</h4>
+          <div className="grid grid-cols-3 gap-4 mb-10 max-w-sm mx-auto">
+             <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
+                <div className="text-2xl font-black text-emerald-600">{importResults.success}</div>
+                <div className="text-[10px] font-bold text-emerald-700 uppercase">Created</div>
+             </div>
+             <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                <div className="text-2xl font-black text-amber-600">{importResults.skipped}</div>
+                <div className="text-[10px] font-bold text-amber-700 uppercase">Skipped</div>
+             </div>
+             <div className="bg-red-50 p-4 rounded-2xl border border-red-100">
+                <div className="text-2xl font-black text-red-600">{importResults.errors}</div>
+                <div className="text-[10px] font-bold text-red-700 uppercase">Errors</div>
+             </div>
+          </div>
+          <button 
+              onClick={onSuccess} 
+              className="bg-gray-900 text-white px-12 py-4 rounded-2xl font-black shadow-xl hover:bg-black transition-all transform active:scale-95"
+          >
+              Done
+          </button>
         </div>
       )}
     </div>
@@ -424,7 +532,6 @@ const PdfUploadSection = () => {
         const rawText = extractData.text;
         console.log(`[Upload] Text extracted. Length: ${rawText?.length}`);
 
-        // Handle DB entry first if it doesn't exist
         let khutbahId: string;
         if (match) {
           khutbahId = match.id;
@@ -445,7 +552,6 @@ const PdfUploadSection = () => {
         }
 
         setUploadProgress(prev => ({ ...prev, [i]: 'Formatting with AI...' }));
-        // API now handles server-side Supabase update because we pass khutbahId
         const formatData = await fetchApi('/api/process-khutbah', { 
             content: rawText, 
             type: 'format',
@@ -458,7 +564,6 @@ const PdfUploadSection = () => {
         await new Promise(r => setTimeout(r, 1000));
 
         setUploadProgress(prev => ({ ...prev, [i]: 'Generating summary...' }));
-        // API now handles card generation and update server-side
         await fetchApi('/api/process-khutbah', { 
             content: formattedHtml, 
             type: 'cards',
@@ -580,7 +685,7 @@ const PdfUploadSection = () => {
                   </div>
                   <div className="w-full bg-emerald-200 rounded-full h-3 overflow-hidden">
                     <div 
-                      className="bg-emerald-600 h-full transition-all duration-500"
+                      className="bg-emerald-600 h-full transition-all duration-300"
                       style={{ width: `${(currentFileIndex / files.length) * 100}%` }}
                     />
                   </div>
