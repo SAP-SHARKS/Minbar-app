@@ -1,34 +1,35 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { getQFAccessToken, getQFBaseUrl } from '../../lib/quranFoundationAuth';
+import { getQFAccessToken, getQFBaseUrl } from '../../lib/quranFoundationAuth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const { q } = req.query;
-  if (!q) return res.status(400).json({ error: 'Query required' });
+  if (!q || q.length < 2) return res.status(400).json({ error: 'Query too short' });
 
-  // 1. Verify Supabase Session
+  // 1. Verify Supabase Session (Auth Gate)
   const sbUrl = process.env.SUPABASE_URL;
   const sbAnonKey = process.env.SUPABASE_ANON_KEY;
   const supabase = createClient(sbUrl, sbAnonKey);
   
   const authHeader = req.headers.authorization;
   if (!authHeader) {
-    return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    return res.status(401).json({ error: 'LOGIN_REQUIRED', message: "Please sign in to search Quran verses." });
   }
 
   const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
   if (authError || !user) {
-    return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    return res.status(401).json({ error: 'LOGIN_REQUIRED', message: "Please sign in to search Quran verses." });
   }
 
   try {
+    // 2. Get QF OAuth Token
     const token = await getQFAccessToken();
     const baseUrl = getQFBaseUrl();
-    const clientId = process.env.QF_CLIENT_ID;
+    const clientId = process.env.QURAN_CLIENT_ID_PROD;
 
-    // 2. Call QF Search API
+    // 3. Call QF Search API with translation 131 (The Clear Quran)
     const searchUrl = `${baseUrl}/content/api/v4/search?q=${encodeURIComponent(q)}&size=10&page=1&language=en&translations=131`;
     
     const response = await fetch(searchUrl, {
@@ -39,34 +40,23 @@ export default async function handler(req, res) {
       }
     });
 
-    if (response.status === 403) {
-      return res.status(503).json({ 
-        error: "QF_FORBIDDEN", 
-        details: "Access denied by Quran Foundation",
-        hint: "Verify client ID and secret scopes."
-      });
+    if (response.status === 401 || response.status === 403) {
+      return res.status(401).json({ error: 'LOGIN_REQUIRED', message: "Access denied by Quran Foundation. Please sign in again." });
     }
 
-    if (response.status === 429) {
-      return res.status(429).json({ error: "QF_RATE_LIMIT" });
-    }
-
-    if (!response.ok) throw new Error(`QF Search Error: ${response.status}`);
+    if (!response.ok) throw new Error(`QF API Error: ${response.status}`);
 
     const searchData = await response.json();
     const searchResults = searchData.search?.results || [];
 
-    // 3. Transform to UI shape
-    // QF search result has 'text' which is usually the translation snippet
-    // We try to pull the specific translation from the translations array
+    // 4. Transform results to normalized UI shape
     const results = searchResults.map(r => ({
       verseKey: r.verse_key,
-      arabic: r.words?.map(w => w.text).join(' ') || '', // Simple fallback for Arabic if not top level
-      english: (r.translations?.[0]?.text || r.text || "Translation unavailable").replace(/<[^>]*>/g, ""),
+      arabic: r.text || r.words?.map(w => w.text).join(' ') || '',
+      english: (r.translations?.[0]?.text || "Translation unavailable").replace(/<[^>]*>/g, ""),
       reference: `Quran ${r.verse_key}`
     }));
 
-    // If Arabic is missing from search snippet, we return the verse key and let frontend fetch detail or use snippet
     return res.status(200).json({ results });
 
   } catch (error) {

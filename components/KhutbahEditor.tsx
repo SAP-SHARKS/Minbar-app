@@ -75,7 +75,7 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
       const target = e.target as HTMLElement;
       const block = target.closest('.khutbah-block--quran');
       if (block) {
-        const verseKey = block.getAttribute('data-verse-key');
+        const verseKey = block.getAttribute('data-verse-key') || block.getAttribute('data-reference');
         setEditingBlock({ verseKey: verseKey || '', element: block as HTMLElement });
       } else {
         if (editorRef.current?.contains(target)) {
@@ -152,15 +152,15 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
   const handleInsertQuran = (data: any) => {
     const arabic = data.arabic || "";
     const english = data.english || data.translation || "";
-    const verseKey = data.verseKey || "";
+    const reference = data.reference || data.verseKey || "";
     
-    // Combined block with both languages in professional sermon format
+    // Universal dual-language block for Quran and Hadith
     const blockHtml = `
-      <div class="khutbah-block khutbah-block--quran quran-block p-6 bg-emerald-50 border-l-4 border-emerald-500 my-6 rounded-r-xl cursor-pointer hover:bg-emerald-50/80 transition-all shadow-sm group relative" data-verse-key="${verseKey}" contenteditable="false">
+      <div class="khutbah-block khutbah-block--quran quran-block p-6 bg-emerald-50 border-l-4 border-emerald-500 my-6 rounded-r-xl cursor-pointer hover:bg-emerald-50/80 transition-all shadow-sm group relative" data-reference="${reference}" contenteditable="false">
         <div class="quran-ar text-3xl font-serif text-right mb-4 leading-[2] text-gray-900" dir="rtl">${arabic}</div>
         ${english ? `<div class="quran-en text-lg text-gray-700 italic mb-2 leading-relaxed">"${english}"</div>` : ''}
         <div class="quran-ref text-sm font-bold text-emerald-700 text-right mt-3 flex items-center justify-end gap-2">
-           <span class="h-px w-6 bg-emerald-200"></span> Quran ${verseKey}
+           <span class="h-px w-6 bg-emerald-200"></span> ${reference}
         </div>
       </div>
       <p><br></p>

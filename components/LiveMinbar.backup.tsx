@@ -163,9 +163,10 @@ export const LiveMinbar: React.FC<LiveMinbarProps> = ({ user, khutbahId, onExit 
         setLoading(true);
         
         // Fetch cards
+        // Added khutbah_id to the select list to fix the TypeScript assignment error at line 186
         const { data: realCards, error } = await supabase
             .from('khutbah_cards')
-            .select('id, card_number, section_label, title, bullet_points, arabic_text, key_quote, quote_source, transition_text, time_estimate_seconds, notes')
+            .select('id, khutbah_id, card_number, section_label, title, bullet_points, arabic_text, key_quote, quote_source, transition_text, time_estimate_seconds, notes')
             .eq('khutbah_id', idToFetch)
             .order('card_number', { ascending: true });
 
