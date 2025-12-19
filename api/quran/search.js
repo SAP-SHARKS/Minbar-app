@@ -9,9 +9,9 @@ export default async function handler(req, res) {
   if (!q || q.length < 2) return res.status(400).json({ error: 'Query too short' });
 
   // 1. Verify Supabase Session (Auth Gate)
-  const sbUrl = process.env.SUPABASE_URL;
-  const sbAnonKey = process.env.SUPABASE_ANON_KEY;
-  const supabase = createClient(sbUrl, sbAnonKey);
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+  const supabase = createClient(supabaseUrl, supabaseKey);
   
   const authHeader = req.headers.authorization;
   if (!authHeader) {
