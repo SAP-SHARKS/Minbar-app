@@ -53,29 +53,30 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
         const res = await fetch(`/api/quran-verse?key=${searchTerm.trim()}`);
         if (res.status === 401 || res.status === 403) {
             setLoginRequired(true);
-            return;
+            throw new Error("Login required");
         }
         if (!res.ok) throw new Error(`Verse ${searchTerm} not found.`);
         const data = await res.json();
-        // Standardize key from translation to english
         setResults([{
             verseKey: data.verseKey,
             arabic: data.arabic,
-            english: data.english || data.translation,
+            english: data.english,
             reference: data.reference
         }]);
       } else {
         const res = await fetch(`/api/quran-search?q=${encodeURIComponent(searchTerm)}`);
         if (res.status === 401 || res.status === 403) {
             setLoginRequired(true);
-            return;
+            throw new Error("Login required");
         }
         if (!res.ok) throw new Error("Search service unavailable");
         const data = await res.json();
         setResults(data.results || []);
       }
     } catch (err: any) {
-      setError(err.message);
+      if (err.message !== "Login required") {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -110,14 +111,17 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
 
   return (
     <div className="flex flex-col h-full gap-4">
+      {/* Auth Requirement UI */}
       {(loginRequired || !user) && (
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
               <div className="flex items-start gap-3">
-                  <AlertTriangle className="text-amber-600 mt-0.5 shrink-0" size={18} />
+                  <div className="bg-amber-100 p-2 rounded-lg text-amber-600">
+                      <AlertTriangle size={18} />
+                  </div>
                   <div className="flex-1">
                       <h4 className="text-sm font-bold text-amber-900">Login Required</h4>
                       <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                          Please sign in to search and insert Quran verses into your khutbah.
+                          You need to be signed in to access the Quran database and search for verses.
                       </p>
                       <button 
                         onClick={handleLoginClick}
@@ -176,18 +180,30 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
           </div>
         ) : results.length > 0 ? (
           results.map((r, i) => (
-            <div key={i} onClick={() => handleInsert(r)} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-emerald-500 hover:shadow-md transition-all group cursor-pointer relative overflow-hidden flex flex-col gap-2">
+            <div 
+              key={i} 
+              onClick={() => handleInsert(r)} 
+              className="p-4 bg-white border border-gray-200 rounded-xl hover:border-emerald-500 hover:shadow-md transition-all group cursor-pointer relative overflow-hidden flex flex-col gap-2"
+            >
               <div className="flex justify-between items-center relative z-10 border-b border-gray-50 pb-2">
-                <div className="font-bold text-gray-400 text-[10px] uppercase tracking-wider flex items-center gap-1.5"><Book size={10} className="text-emerald-500" /> {r.reference}</div>
-                <div className="p-1 bg-emerald-50 text-emerald-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Plus size={14} strokeWidth={3} /></div>
+                <div className="font-bold text-gray-400 text-[10px] uppercase tracking-wider flex items-center gap-1.5">
+                  <Book size={10} className="text-emerald-500" /> {r.reference}
+                </div>
+                <div className="p-1 bg-emerald-50 text-emerald-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Plus size={14} strokeWidth={3} />
+                </div>
               </div>
-              {r.arabic && <div className="text-right font-serif text-lg leading-loose text-gray-900" dir="rtl">{r.arabic}</div>}
-              {r.english && (
-                <div 
-                  className="text-xs text-gray-600 leading-relaxed italic" 
-                  dangerouslySetInnerHTML={{ __html: `"${r.english}"` }} 
-                />
+              
+              {/* Dual Language Preview */}
+              {r.arabic && (
+                <div className="text-right font-serif text-lg leading-loose text-gray-900 mt-1" dir="rtl">
+                  {r.arabic}
+                </div>
               )}
+              <div className="text-xs text-gray-600 leading-relaxed italic border-l-2 border-emerald-100 pl-3 py-1 bg-gray-50/50 rounded-r-lg">
+                {r.english || "Translation unavailable"}
+              </div>
+              
               <div className="absolute inset-0 bg-emerald-50 opacity-0 group-hover:opacity-30 transition-opacity" />
             </div>
           ))
@@ -195,11 +211,13 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
             <div className="text-center py-20 text-gray-400">
                 <Book size={48} className="mx-auto mb-4 opacity-10"/>
                 <p className="text-sm font-medium">No results found for "{query}"</p>
+                <p className="text-xs mt-1">Try a different keyword or Surah:Ayah</p>
             </div>
         ) : user ? (
             <div className="text-center py-20 text-gray-400 opacity-60">
                 <Book size={48} className="mx-auto mb-4 opacity-20"/>
                 <p className="text-xs font-medium uppercase tracking-widest">Quran Assistant</p>
+                <p className="text-[10px] mt-2 italic px-8">Keyword search for themes or enter Surah:Ayah.</p>
             </div>
         ) : null}
       </div>

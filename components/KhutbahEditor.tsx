@@ -151,10 +151,10 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
 
   const handleInsertQuran = (data: any) => {
     const arabic = data.arabic || "";
-    const english = data.english || data.translation || "";
+    const english = data.english || "";
     const verseKey = data.verseKey || "";
     
-    // Combined block with both languages
+    // Structured block HTML for both Arabic and English
     const blockHtml = `
       <div class="khutbah-block khutbah-block--quran quran-block p-6 bg-emerald-50 border-l-4 border-emerald-500 my-6 rounded-r-xl cursor-pointer hover:bg-emerald-50/80 transition-all shadow-sm group relative" data-verse-key="${verseKey}" contenteditable="false">
         <div class="quran-ar text-3xl font-serif text-right mb-4 leading-[2] text-gray-900" dir="rtl">${arabic}</div>

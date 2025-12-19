@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     const result = {
       verseKey: key,
       arabic: arabicData.verses?.[0]?.text_uthmani || '',
-      english: transData.translations?.[0]?.text.replace(/<[^>]*>/g, '') || '',
+      english: (transData.translations?.[0]?.text || '').replace(/<[^>]*>/g, ''),
       reference: `Quran ${key}`,
       source: 'quran.com'
     };

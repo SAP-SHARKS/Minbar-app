@@ -25,29 +25,36 @@ export default async function handler(req, res) {
     if (!response.ok) throw new Error(`Search failed: ${response.status}`);
 
     const searchData = await response.json();
-    const searchResults = searchData.search.results;
+    const searchResults = searchData.search.results || [];
 
-    // For each result, fetch full verse details (Arabic Uthmani + Sahih International 131)
+    // Map each result to a full verse fetch to get clean Arabic + Specific Translation
     const results = await Promise.all(searchResults.map(async (r) => {
       try {
-        const detailRes = await fetch(
-          `${QURAN_API_BASE}/verses/by_key/${r.verse_key}?language=en&words=false&translations=131&fields=text_uthmani`
-        );
+        const verseKey = r.verse_key;
+        // Fetch detailed verse info including Sahih International translation (ID 131)
+        const detailUrl = `${QURAN_API_BASE}/verses/by_key/${verseKey}?language=en&words=false&translations=131&fields=text_uthmani`;
+        const detailRes = await fetch(detailUrl);
+        
+        if (!detailRes.ok) throw new Error(`Failed to fetch details for ${verseKey}`);
+        
         const details = await detailRes.json();
         const verse = details?.verse;
 
+        // DEBUG: Server-side log for validation
+        console.log(`[QuranSearch] Verse: ${verseKey}, Has Translation: ${!!verse?.translations?.[0]?.text}`);
+
         return {
-          verseKey: r.verse_key,
+          verseKey: verseKey,
           arabic: verse?.text_uthmani || "",
-          english: (verse?.translations?.[0]?.text || "").replace(/<[^>]*>/g, ""),
-          reference: `Quran ${r.verse_key}`
+          english: (verse?.translations?.[0]?.text || "Translation unavailable").replace(/<[^>]*>/g, ""),
+          reference: `Quran ${verseKey}`
         };
       } catch (e) {
-        // Fallback to basic snippet if detail fetch fails
+        console.warn(`[QuranSearch] Mapping fallback for ${r.verse_key}:`, e.message);
         return {
           verseKey: r.verse_key,
           arabic: "", 
-          english: r.text.replace(/<[^>]*>/g, ""),
+          english: r.text.replace(/<[^>]*>/g, ""), // Use search snippet as fallback
           reference: `Quran ${r.verse_key}`
         };
       }
