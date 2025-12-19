@@ -6,13 +6,13 @@ import { useAuth } from '../../contexts/AuthContext';
 interface QuranResult {
   verseKey: string;
   arabic?: string;
-  translation: string;
+  english: string;
   reference: string;
-  text?: string; // Standard search API uses 'text' for snippets
+  translation?: string; // mapping helper
 }
 
 interface QuranBlockPanelProps {
-  onInsert: (data: QuranResult) => void;
+  onInsert: (data: any) => void;
   editingBlock?: { verseKey: string; element: HTMLElement } | null;
   onRemoveBlock?: () => void;
   onCancelEdit?: () => void;
@@ -34,7 +34,6 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
   const [loginRequired, setLoginRequired] = useState(false);
   const [activeCategory, setActiveCategory] = useState('quran');
 
-  // Unified search function
   const performSearch = async (searchTerm: string) => {
     if (!user) {
       setLoginRequired(true);
@@ -51,41 +50,40 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
     setLoginRequired(false);
     
     try {
-      // Check if it's a direct verse lookup (e.g. 2:255)
       if (/^\d{1,3}:\d{1,3}$/.test(searchTerm.trim())) {
+        // Direct verse lookup
         const res = await fetch(`/api/quran-verse?key=${searchTerm.trim()}`);
         if (res.status === 401 || res.status === 403) {
             setLoginRequired(true);
-            throw new Error("Authentication required");
+            return;
         }
         if (!res.ok) throw new Error(`Verse ${searchTerm} not found.`);
         const data = await res.json();
-        setResults([data]);
+        // Map response to our internal result type
+        setResults([{
+            verseKey: data.verseKey,
+            arabic: data.arabic,
+            english: data.translation,
+            reference: data.reference
+        }]);
       } else {
-        // Keyword search via proxy
+        // Keyword search
         const res = await fetch(`/api/quran-search?q=${encodeURIComponent(searchTerm)}`);
         if (res.status === 401 || res.status === 403) {
             setLoginRequired(true);
-            throw new Error("Authentication required");
+            return;
         }
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `Search failed (${res.status})`);
-        }
+        if (!res.ok) throw new Error("Search service unavailable");
         const data = await res.json();
         setResults(data.results || []);
       }
     } catch (err: any) {
-      if (err.message !== "Authentication required") {
-        console.error(`[QuranPanel] Search Error:`, err);
-        setError(err.message);
-      }
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Debounced search logic
   useEffect(() => {
     if (!query) return;
     const timeoutId = setTimeout(() => {
@@ -96,27 +94,36 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
     return () => clearTimeout(timeoutId);
   }, [query]);
 
-  const handleInsertFullVerse = async (verseKey: string) => {
+  const handleInsertWithFullDetails = async (item: QuranResult) => {
     if (!user) {
         setLoginRequired(true);
         return;
     }
 
+    // Already have enough for insertion if Arabic is present
+    if (item.arabic && item.english) {
+        onInsert({ 
+            verseKey: item.verseKey, 
+            arabic: item.arabic, 
+            translation: item.english, 
+            reference: item.reference 
+        });
+        if (!editingBlock) { setResults([]); setQuery(''); }
+        return;
+    }
+
     setLoading(true);
     try {
-      const res = await fetch(`/api/quran-verse?key=${verseKey}`);
-      if (res.status === 401 || res.status === 403) {
-          setLoginRequired(true);
-          return;
-      }
+      const res = await fetch(`/api/quran-verse?key=${item.verseKey}`);
       if (!res.ok) throw new Error('Failed to fetch full verse details');
-      const fullData = await res.json();
-      onInsert(fullData);
-      
-      if (!editingBlock) {
-          setResults([]);
-          setQuery('');
-      }
+      const data = await res.json();
+      onInsert({ 
+          verseKey: data.verseKey, 
+          arabic: data.arabic, 
+          translation: data.translation, 
+          reference: data.reference 
+      });
+      if (!editingBlock) { setResults([]); setQuery(''); }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -131,104 +138,65 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
 
   return (
     <div className="flex flex-col h-full gap-4">
-      {/* Auth Requirement Message */}
+      {/* Login Alert */}
       {(loginRequired || !user) && (
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
               <div className="flex items-start gap-3">
-                  <div className="bg-amber-100 p-2 rounded-lg text-amber-600">
-                      <AlertTriangle size={18} />
-                  </div>
+                  <AlertTriangle className="text-amber-600 mt-0.5 shrink-0" size={18} />
                   <div className="flex-1">
                       <h4 className="text-sm font-bold text-amber-900">Login Required</h4>
                       <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                          You need to be signed in to access the Quran database and insert verses.
+                          Please sign in to search and insert Quran verses into your khutbah.
                       </p>
                       <button 
                         onClick={handleLoginClick}
                         className="mt-3 flex items-center gap-2 bg-amber-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors shadow-sm"
                       >
-                          <LogIn size={14} /> Sign In Now
+                          <LogIn size={14} /> Sign In
                       </button>
                   </div>
               </div>
           </div>
       )}
 
-      {/* Edit Mode Header */}
-      {editingBlock ? (
-        <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 mb-2 shadow-sm animate-in fade-in zoom-in duration-200">
+      {editingBlock && (
+        <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 shadow-sm animate-in zoom-in duration-200">
             <div className="flex justify-between items-center mb-2">
-                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1">
-                    <Info size={10}/> Editing Block
-                </span>
-                <button onClick={onCancelEdit} className="text-gray-400 hover:text-gray-600 transition-colors">
-                    <ArrowLeft size={14}/>
-                </button>
+                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1"><Info size={10}/> Replacing Verse</span>
+                <button onClick={onCancelEdit} className="text-gray-400 hover:text-gray-600"><ArrowLeft size={14}/></button>
             </div>
-            <div className="font-bold text-gray-800 text-lg">Quran {editingBlock.verseKey}</div>
-            <div className="mt-4 flex gap-2">
-                <button 
-                  onClick={onRemoveBlock}
-                  className="flex-1 py-2 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                    <Trash2 size={12}/> Remove Block
-                </button>
-            </div>
-        </div>
-      ) : null}
-
-      {/* Categories */}
-      {user && !editingBlock && (
-        <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-            {CATEGORIES.map(cat => (
-                <button
-                    key={cat.id}
-                    onClick={() => cat.active && setActiveCategory(cat.id)}
-                    className={`
-                        px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all
-                        ${cat.id === activeCategory 
-                            ? 'bg-emerald-600 text-white shadow-md' 
-                            : cat.active 
-                                ? 'bg-gray-100 text-gray-500 hover:bg-gray-200' 
-                                : 'bg-gray-50 text-gray-300 cursor-not-allowed'}
-                    `}
-                >
-                    {cat.label}{!cat.active && '...'}
-                </button>
-            ))}
+            <div className="font-bold text-gray-800">Quran {editingBlock.verseKey}</div>
+            <button onClick={onRemoveBlock} className="mt-4 w-full py-2 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-lg hover:bg-red-50 flex items-center justify-center gap-1.5 shadow-sm">
+                <Trash2 size={12}/> Remove Block
+            </button>
         </div>
       )}
 
-      {/* Search Input */}
       {user && (
-        <div className="relative">
-          <input 
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={editingBlock ? "Search to replace..." : "Search (e.g. 'Patience' or '2:185')"}
-            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all shadow-inner"
-          />
-          {loading ? (
-              <Loader2 className="absolute left-3 top-3.5 text-emerald-500 animate-spin" size={18} />
-          ) : (
-              <Search className="absolute left-3 top-3.5 text-gray-400" size={18} />
-          )}
-        </div>
-      )}
-
-      {/* Error State */}
-      {error && (
-        <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100 flex items-start gap-2 animate-in slide-in-from-top-2 duration-200">
-            <Trash2 size={14} className="shrink-0 mt-0.5" />
-            <div>
-                <p className="font-bold">Search failed</p>
-                <p className="opacity-80">{error}</p>
+        <>
+            <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                {CATEGORIES.map(cat => (
+                    <button key={cat.id} onClick={() => cat.active && setActiveCategory(cat.id)} className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all ${cat.id === activeCategory ? 'bg-emerald-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                        {cat.label}
+                    </button>
+                ))}
             </div>
-        </div>
+
+            <div className="relative">
+                <input 
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search themes or Surah:Ayah..."
+                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all shadow-inner"
+                />
+                {loading ? <Loader2 className="absolute left-3 top-3.5 text-emerald-500 animate-spin" size={18} /> : <Search className="absolute left-3 top-3.5 text-gray-400" size={18} />}
+            </div>
+        </>
       )}
 
-      {/* Results List */}
+      {error && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100">{error}</div>}
+
       <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1">
         {loading && results.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
@@ -237,49 +205,27 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
           </div>
         ) : results.length > 0 ? (
           results.map((r, i) => (
-            <div 
-                key={i} 
-                onClick={() => handleInsertFullVerse(r.verseKey)}
-                className="p-4 bg-white border border-gray-200 rounded-xl hover:border-emerald-500 hover:shadow-md transition-all group cursor-pointer relative overflow-hidden flex flex-col gap-2"
-            >
+            <div key={i} onClick={() => handleInsertWithFullDetails(r)} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-emerald-500 hover:shadow-md transition-all group cursor-pointer relative overflow-hidden flex flex-col gap-2">
               <div className="flex justify-between items-center relative z-10 border-b border-gray-50 pb-2">
-                <div className="font-bold text-gray-400 text-[10px] uppercase tracking-wider flex items-center gap-1.5">
-                    <Book size={10} className="text-emerald-500" />
-                    {r.reference}
-                </div>
-                <div className="p-1 bg-emerald-50 text-emerald-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Plus size={14} strokeWidth={3} />
-                </div>
+                <div className="font-bold text-gray-400 text-[10px] uppercase tracking-wider flex items-center gap-1.5"><Book size={10} className="text-emerald-500" /> {r.reference}</div>
+                <div className="p-1 bg-emerald-50 text-emerald-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Plus size={14} strokeWidth={3} /></div>
               </div>
-              
-              {/* Arabic Text (If available, usually in direct verse lookup) */}
-              {r.arabic && (
-                  <div className="text-right font-serif text-lg leading-loose text-gray-900 mb-1" dir="rtl">
-                      {r.arabic}
-                  </div>
-              )}
-
-              {/* Translation snippet */}
-              <div className="text-xs text-gray-600 leading-relaxed relative z-10 italic">
-                "{r.text || r.translation}"
-              </div>
-              
+              {r.arabic && <div className="text-right font-serif text-lg leading-loose text-gray-900" dir="rtl">{r.arabic}</div>}
+              <div className="text-xs text-gray-600 leading-relaxed italic" dangerouslySetInnerHTML={{ __html: r.english }} />
               <div className="absolute inset-0 bg-emerald-50 opacity-0 group-hover:opacity-30 transition-opacity" />
             </div>
           ))
         ) : query.length >= 2 && !loading && user ? (
-            <div className="text-center py-20 text-gray-400 animate-in fade-in duration-300">
+            <div className="text-center py-20 text-gray-400">
                 <Book size={48} className="mx-auto mb-4 opacity-10"/>
                 <p className="text-sm font-medium">No results found for "{query}"</p>
-                <p className="text-xs mt-1">Try a topic or verse key like "2:255"</p>
             </div>
-        ) : !user ? null : (
+        ) : user ? (
             <div className="text-center py-20 text-gray-400 opacity-60">
                 <Book size={48} className="mx-auto mb-4 opacity-20"/>
                 <p className="text-xs font-medium uppercase tracking-widest">Quran Assistant</p>
-                <p className="text-[10px] mt-2 italic px-8">Keyword search for themes or enter Surah:Ayah.</p>
             </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

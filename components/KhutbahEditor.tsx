@@ -86,11 +86,9 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
       const target = e.target as HTMLElement;
       const block = target.closest('.khutbah-block--quran');
       if (block) {
-        console.log('[Editor] Quran block clicked:', block.getAttribute('data-verse-key'));
         const verseKey = block.getAttribute('data-verse-key');
         setEditingBlock({ verseKey: verseKey || '', element: block as HTMLElement });
       } else {
-        // If clicking away but still in the editor, clear editing block
         if (editorRef.current?.contains(target)) {
            setEditingBlock(null);
         }
@@ -165,34 +163,26 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
 
   // --- Block Inserter Logic ---
   const handleInsertQuran = (data: any) => {
-    console.log('[Editor] Inserting/Replacing Quran Block:', data.verseKey);
-    
-    // Consistent structure for the block
+    // Structured block HTML for both Arabic and English
     const blockHtml = `
-      <div class="khutbah-block khutbah-block--quran p-6 bg-emerald-50/50 border-l-4 border-emerald-500 my-6 rounded-r-xl cursor-pointer hover:bg-emerald-50 transition-all shadow-sm group relative" data-verse-key="${data.verseKey}" contenteditable="false">
-        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-           <span class="bg-emerald-600 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded shadow-sm">Editable Block</span>
-        </div>
-        <div class="quran-arabic text-3xl font-serif text-right mb-4 leading-[2.2] text-gray-900" dir="rtl">${data.arabic}</div>
-        <div class="quran-translation text-lg text-gray-700 italic mb-2 leading-relaxed">"${data.translation}"</div>
-        <div class="quran-ref text-sm font-bold text-emerald-700 text-right mt-2 flex items-center justify-end gap-1.5">
-           <span class="h-px w-8 bg-emerald-200"></span> Quran ${data.verseKey}
+      <div class="khutbah-block khutbah-block--quran quran-block p-6 bg-emerald-50 border-l-4 border-emerald-500 my-6 rounded-r-xl cursor-pointer hover:bg-emerald-50/80 transition-all shadow-sm group relative" data-verse-key="${data.verseKey}" contenteditable="false">
+        <div class="quran-ar text-3xl font-serif text-right mb-4 leading-[2] text-gray-900" dir="rtl">${data.arabic}</div>
+        <div class="quran-en text-lg text-gray-700 italic mb-2 leading-relaxed">"${data.translation}"</div>
+        <div class="quran-ref text-sm font-bold text-emerald-700 text-right mt-3 flex items-center justify-end gap-2">
+           <span class="h-px w-6 bg-emerald-200"></span> ${data.reference}
         </div>
       </div>
       <p><br></p>
     `;
 
     if (editingBlock) {
-        // REPLACE existing block
         editingBlock.element.outerHTML = blockHtml;
         setEditingBlock(null);
     } else {
-        // INSERT at cursor
         editorRef.current?.focus();
         document.execCommand('insertHTML', false, blockHtml);
     }
 
-    // Force content sync
     if (editorRef.current) {
         setContent(editorRef.current.innerHTML);
         setSaveStatus('unsaved');
@@ -201,7 +191,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
 
   const handleRemoveBlock = () => {
     if (editingBlock) {
-        console.log('[Editor] Removing block:', editingBlock.verseKey);
         editingBlock.element.remove();
         setEditingBlock(null);
         if (editorRef.current) {
