@@ -8,6 +8,8 @@ interface SearchResult {
   arabic: string;
   english: string;
   reference: string;
+  book?: string;
+  hadithNumber?: string;
 }
 
 interface QuranBlockPanelProps {
@@ -51,7 +53,6 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
     try {
       let endpoint = '';
       if (activeCategory === 'quran') {
-        // Direct verse lookup or search
         if (/^\d{1,3}:\d{1,3}$/.test(searchTerm.trim())) {
             endpoint = `/api/quran-verse?key=${searchTerm.trim()}`;
         } else {
@@ -79,7 +80,6 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
 
       if (!res.ok) throw new Error(data.error || "Search failed");
 
-      // Normalize Verse detail vs Search results
       const finalResults = data.results || (data.verseKey ? [data] : []);
       setResults(finalResults);
 
@@ -106,7 +106,6 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
 
   return (
     <div className="flex flex-col h-full gap-4">
-      {/* Category Tabs */}
       <div className="flex gap-2 p-1 bg-gray-100 rounded-xl overflow-x-auto custom-scrollbar">
           {CATEGORIES.map(cat => (
               <button 
@@ -123,7 +122,7 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
           ))}
       </div>
 
-      {loginRequired && (
+      {(loginRequired || !user) && (
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
               <div className="flex items-start gap-3">
                   <AlertTriangle className="text-amber-600 mt-0.5 shrink-0" size={18} />
