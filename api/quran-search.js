@@ -1,10 +1,10 @@
 
 /**
  * Server-side proxy for Quran.com Search API v4
- * Enhanced to fetch Arabic text for premium preview cards
+ * Fixes: Correctly maps English translation and Arabic text for results.
  */
 export default async function handler(req, res) {
-  const { q, page = 1, size = 10, language = 'en' } = req.query;
+  const { q, page = 1, size = 5, language = 'en' } = req.query;
 
   if (!q || q.length < 2) {
     return res.status(400).json({ error: "Query string must be at least 2 characters long." });
@@ -15,43 +15,46 @@ export default async function handler(req, res) {
 
   try {
     const response = await fetch(searchUrl, {
-      headers: {
-        'Accept': 'application/json',
-        'x-client-id': process.env.QF_CLIENT_ID || 'minbar-ai-guest'
-      }
+      headers: { 'Accept': 'application/json' }
     });
 
     if (response.status === 429) {
       return res.status(429).json({ error: "Rate limit exceeded. Please wait." });
     }
 
-    if (!response.ok) throw new Error(`Quran API search failed: ${response.status}`);
+    if (!response.ok) throw new Error(`Search failed: ${response.status}`);
 
     const searchData = await response.json();
-    const results = searchData.search.results;
+    const searchResults = searchData.search.results;
 
-    // Fetch Arabic (Indopak) for the top results to show in preview cards
-    const resultsWithArabic = await Promise.all(results.map(async (r) => {
+    // For each result, fetch clean Arabic + specific English translation (131 = Sahih International)
+    const results = await Promise.all(searchResults.map(async (r) => {
       try {
-        const arabicRes = await fetch(`${QURAN_API_BASE}/quran/verses/indopak?verse_key=${r.verse_key}`);
-        const arabicData = await arabicRes.json();
+        const detailRes = await fetch(
+          `${QURAN_API_BASE}/verses/by_key/${r.verse_key}?language=en&words=false&translations=131&fields=text_uthmani`
+        );
+        const details = await detailRes.json();
+        const verse = details?.verse;
+
         return {
           verseKey: r.verse_key,
-          english: r.text.replace(/<[^>]*>/g, ''), // Search snippet is the English translation
-          arabic: arabicData.verses?.[0]?.text_indopak || '',
+          arabic: verse?.text_uthmani || "",
+          english: (verse?.translations?.[0]?.text || "").replace(/<[^>]*>/g, ""),
           reference: `Quran ${r.verse_key}`
         };
       } catch (e) {
+        // Fallback to original search result data if detail fetch fails
         return {
           verseKey: r.verse_key,
-          english: r.text.replace(/<[^>]*>/g, ''),
+          arabic: "", 
+          english: r.text.replace(/<[^>]*>/g, ""),
           reference: `Quran ${r.verse_key}`
         };
       }
     }));
 
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({ results: resultsWithArabic });
+    return res.status(200).json({ results });
 
   } catch (error) {
     console.error('[API/Quran-Search] Error:', error);

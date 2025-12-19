@@ -44,30 +44,20 @@ const SECTION_OPTIONS = [
 ];
 
 export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, onGoLive, onSaveNew }) => {
-  // Layout State
   const [activeTool, setActiveTool] = useState<string | null>(null);
-  
-  // Editor Content State
   const [content, setContent] = useState<string>('<p>In the name of Allah...</p>');
   const [khutbahTitle, setKhutbahTitle] = useState("Untitled Khutbah");
   const [activeKhutbahId, setActiveKhutbahId] = useState<string | null>(khutbahId);
-  
-  // Cards State
   const [cards, setCards] = useState<KhutbahCard[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [showCardModal, setShowCardModal] = useState(false); 
-  
-  // Block Editing State
   const [editingBlock, setEditingBlock] = useState<{ verseKey: string; element: HTMLElement } | null>(null);
-
-  // UI State
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('unsaved');
   const [fontSize, setFontSize] = useState(16);
   const editorRef = useRef<HTMLDivElement>(null);
   const [activeFormats, setActiveFormats] = useState<string[]>([]);
 
-  // --- Initialization ---
   useEffect(() => {
     setActiveKhutbahId(khutbahId);
     if (khutbahId) {
@@ -80,7 +70,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
     }
   }, [khutbahId]);
 
-  // Unified click listener for selecting editable blocks (Thrive-like)
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -131,7 +120,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
       if (!user) return alert("Please sign in to save.");
       setIsSaving(true);
       setSaveStatus('saving');
-
       try {
           if (activeKhutbahId) {
               await supabase.from('user_khutbahs')
@@ -161,15 +149,17 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
       }
   };
 
-  // --- Block Inserter Logic ---
   const handleInsertQuran = (data: any) => {
-    // Structured block HTML for both Arabic and English
+    const arabic = data.arabic || "";
+    const english = data.english || "";
+    const verseKey = data.verseKey || "";
+    
     const blockHtml = `
-      <div class="khutbah-block khutbah-block--quran quran-block p-6 bg-emerald-50 border-l-4 border-emerald-500 my-6 rounded-r-xl cursor-pointer hover:bg-emerald-50/80 transition-all shadow-sm group relative" data-verse-key="${data.verseKey}" contenteditable="false">
-        <div class="quran-ar text-3xl font-serif text-right mb-4 leading-[2] text-gray-900" dir="rtl">${data.arabic}</div>
-        <div class="quran-en text-lg text-gray-700 italic mb-2 leading-relaxed">"${data.translation}"</div>
+      <div class="khutbah-block khutbah-block--quran quran-block p-6 bg-emerald-50 border-l-4 border-emerald-500 my-6 rounded-r-xl cursor-pointer hover:bg-emerald-50/80 transition-all shadow-sm group relative" data-verse-key="${verseKey}" contenteditable="false">
+        <div class="quran-ar text-3xl font-serif text-right mb-4 leading-[2] text-gray-900" dir="rtl">${arabic}</div>
+        ${english ? `<div class="quran-en text-lg text-gray-700 italic mb-2 leading-relaxed">"${english}"</div>` : ''}
         <div class="quran-ref text-sm font-bold text-emerald-700 text-right mt-3 flex items-center justify-end gap-2">
-           <span class="h-px w-6 bg-emerald-200"></span> ${data.reference}
+           <span class="h-px w-6 bg-emerald-200"></span> Quran ${verseKey}
         </div>
       </div>
       <p><br></p>
@@ -200,7 +190,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
     }
   };
 
-  // --- Card Logic ---
   const handleAddCard = async () => {
       if (!activeKhutbahId) return alert("Please save the khutbah first.");
       const nextNumber = cards.length > 0 ? Math.max(...cards.map(c => c.card_number)) + 1 : 1;
@@ -237,14 +226,10 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
 
   return (
     <div className="flex h-full bg-gray-50 overflow-hidden relative md:pl-20">
-      
-      {/* 1. Left Toolbar */}
       <div className="relative flex flex-col h-full shrink-0 z-20">
           <LeftToolbar activeTool={activeTool} onToolSelect={setActiveTool} />
           <LeftPanel activeTool={activeTool} onClose={() => setActiveTool(null)} />
       </div>
-
-      {/* 2. Center Column (Editor) */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#F9FBFD] relative">
         <div className="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-6 shrink-0 z-10">
             <div className="flex items-center gap-4 flex-1">
@@ -259,7 +244,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
                     {saveStatus === 'saving' ? <Loader2 size={10} className="animate-spin"/> : saveStatus}
                 </span>
             </div>
-            
             <div className="flex items-center gap-3">
                 {activeKhutbahId && onGoLive && (
                     <button onClick={() => onGoLive(activeKhutbahId)} className="bg-white border border-red-100 text-red-600 hover:bg-red-50 px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors shadow-sm">
@@ -271,16 +255,9 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
                 </button>
             </div>
         </div>
-
         <div className="bg-white border-b border-gray-200 px-6 py-3 flex justify-center shrink-0 shadow-sm z-10">
-            <EditorToolbar 
-                onExec={execCommand} 
-                activeFormats={activeFormats} 
-                fontSize={fontSize} 
-                onFontSizeChange={setFontSize} 
-            />
+            <EditorToolbar onExec={execCommand} activeFormats={activeFormats} fontSize={fontSize} onFontSizeChange={setFontSize} />
         </div>
-
         <div 
             className="flex-1 overflow-y-auto cursor-text scroll-smooth custom-scrollbar"
             onClick={(e) => {
@@ -304,8 +281,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
             </div>
         </div>
       </div>
-
-      {/* 3. Right Sidebar (Thrive-like) */}
       <RightSidebar 
         cards={cards}
         onCardClick={(id) => { setSelectedCardId(id); setShowCardModal(true); }}
@@ -316,8 +291,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
         onRemoveBlock={handleRemoveBlock}
         onCancelEdit={() => setEditingBlock(null)}
       />
-
-      {/* Modal for Card Editing */}
       {showCardModal && activeCard && (
           <div className="absolute inset-0 z-50 bg-black/30 backdrop-blur-sm flex justify-end animate-in fade-in duration-200">
               <div className="w-[500px] bg-white h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col border-l border-gray-200">
@@ -331,7 +304,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
                           <button onClick={() => setShowCardModal(false)} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20}/></button>
                       </div>
                   </div>
-                  
                   <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
                       <div>
                           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Section Category</label>
@@ -340,19 +312,13 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
                                  <button
                                     key={opt.value}
                                     onClick={() => updateCard(activeCard.id, 'section_label', opt.value)}
-                                    className={`
-                                        py-2 text-[10px] font-bold rounded-lg border transition-all
-                                        ${activeCard.section_label === opt.value 
-                                            ? 'bg-emerald-600 border-emerald-600 text-white shadow-md' 
-                                            : 'bg-white border-gray-200 text-gray-500 hover:border-emerald-300'}
-                                    `}
+                                    className={`py-2 text-[10px] font-bold rounded-lg border transition-all ${activeCard.section_label === opt.value ? 'bg-emerald-600 border-emerald-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-emerald-300'}`}
                                  >
                                      {opt.label}
                                  </button>
                              ))}
                           </div>
                       </div>
-
                       <div>
                           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Display Title</label>
                           <input 
@@ -362,7 +328,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
                               placeholder="e.g. Introduction"
                           />
                       </div>
-
                       <div>
                           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Core Talking Points</label>
                           <div className="space-y-3">
@@ -391,7 +356,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
                               </button>
                           </div>
                       </div>
-
                       <div className="pt-4 border-t border-gray-100">
                           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Arabic Recitation / Script</label>
                           <div className="relative">
@@ -407,7 +371,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
                           </div>
                       </div>
                   </div>
-                  
                   <div className="p-6 bg-gray-50 border-t border-gray-100">
                       <button 
                         onClick={() => setShowCardModal(false)}
@@ -419,7 +382,6 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
               </div>
           </div>
       )}
-
     </div>
   );
 }

@@ -5,10 +5,9 @@ import { useAuth } from '../../contexts/AuthContext';
 
 interface QuranResult {
   verseKey: string;
-  arabic?: string;
+  arabic: string;
   english: string;
   reference: string;
-  translation?: string; // mapping helper
 }
 
 interface QuranBlockPanelProps {
@@ -51,7 +50,6 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
     
     try {
       if (/^\d{1,3}:\d{1,3}$/.test(searchTerm.trim())) {
-        // Direct verse lookup
         const res = await fetch(`/api/quran-verse?key=${searchTerm.trim()}`);
         if (res.status === 401 || res.status === 403) {
             setLoginRequired(true);
@@ -59,15 +57,8 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
         }
         if (!res.ok) throw new Error(`Verse ${searchTerm} not found.`);
         const data = await res.json();
-        // Map response to our internal result type
-        setResults([{
-            verseKey: data.verseKey,
-            arabic: data.arabic,
-            english: data.translation,
-            reference: data.reference
-        }]);
+        setResults([data]);
       } else {
-        // Keyword search
         const res = await fetch(`/api/quran-search?q=${encodeURIComponent(searchTerm)}`);
         if (res.status === 401 || res.status === 403) {
             setLoginRequired(true);
@@ -94,40 +85,18 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
     return () => clearTimeout(timeoutId);
   }, [query]);
 
-  const handleInsertWithFullDetails = async (item: QuranResult) => {
+  const handleInsert = async (item: QuranResult) => {
     if (!user) {
         setLoginRequired(true);
         return;
     }
-
-    // Already have enough for insertion if Arabic is present
-    if (item.arabic && item.english) {
-        onInsert({ 
-            verseKey: item.verseKey, 
-            arabic: item.arabic, 
-            translation: item.english, 
-            reference: item.reference 
-        });
-        if (!editingBlock) { setResults([]); setQuery(''); }
-        return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/quran-verse?key=${item.verseKey}`);
-      if (!res.ok) throw new Error('Failed to fetch full verse details');
-      const data = await res.json();
-      onInsert({ 
-          verseKey: data.verseKey, 
-          arabic: data.arabic, 
-          translation: data.translation, 
-          reference: data.reference 
-      });
-      if (!editingBlock) { setResults([]); setQuery(''); }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    
+    // Pass complete data to editor
+    onInsert(item);
+    
+    if (!editingBlock) {
+        setResults([]);
+        setQuery('');
     }
   };
 
@@ -138,7 +107,6 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
 
   return (
     <div className="flex flex-col h-full gap-4">
-      {/* Login Alert */}
       {(loginRequired || !user) && (
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
               <div className="flex items-start gap-3">
@@ -205,13 +173,18 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
           </div>
         ) : results.length > 0 ? (
           results.map((r, i) => (
-            <div key={i} onClick={() => handleInsertWithFullDetails(r)} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-emerald-500 hover:shadow-md transition-all group cursor-pointer relative overflow-hidden flex flex-col gap-2">
+            <div key={i} onClick={() => handleInsert(r)} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-emerald-500 hover:shadow-md transition-all group cursor-pointer relative overflow-hidden flex flex-col gap-2">
               <div className="flex justify-between items-center relative z-10 border-b border-gray-50 pb-2">
                 <div className="font-bold text-gray-400 text-[10px] uppercase tracking-wider flex items-center gap-1.5"><Book size={10} className="text-emerald-500" /> {r.reference}</div>
                 <div className="p-1 bg-emerald-50 text-emerald-600 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Plus size={14} strokeWidth={3} /></div>
               </div>
               {r.arabic && <div className="text-right font-serif text-lg leading-loose text-gray-900" dir="rtl">{r.arabic}</div>}
-              <div className="text-xs text-gray-600 leading-relaxed italic" dangerouslySetInnerHTML={{ __html: r.english }} />
+              {r.english && (
+                <div 
+                  className="text-xs text-gray-600 leading-relaxed italic" 
+                  dangerouslySetInnerHTML={{ __html: `"${r.english}"` }} 
+                />
+              )}
               <div className="absolute inset-0 bg-emerald-50 opacity-0 group-hover:opacity-30 transition-opacity" />
             </div>
           ))

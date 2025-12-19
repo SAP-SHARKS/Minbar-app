@@ -12,11 +12,9 @@ export default async function handler(req, res) {
   const QURAN_API_BASE = 'https://api.quran.com/api/v4';
   
   try {
-    console.log(`[API/Quran-Verse] Fetching details for ${key}`);
-
-    // We fetch Arabic (Indopak) and translation (Clear Quran = 131)
+    // Fetch Arabic (Uthmani) and translation (Sahih International = 131)
     const [arabicRes, transRes] = await Promise.all([
-      fetch(`${QURAN_API_BASE}/quran/verses/indopak?verse_key=${key}`),
+      fetch(`${QURAN_API_BASE}/quran/verses/uthmani?verse_key=${key}`),
       fetch(`${QURAN_API_BASE}/quran/translations/131?verse_key=${key}`)
     ]);
 
@@ -25,8 +23,8 @@ export default async function handler(req, res) {
 
     const result = {
       verseKey: key,
-      arabic: arabicData.verses?.[0]?.text_indopak || '',
-      translation: transData.translations?.[0]?.text.replace(/<[^>]*>/g, '') || '',
+      arabic: arabicData.verses?.[0]?.text_uthmani || '',
+      english: transData.translations?.[0]?.text.replace(/<[^>]*>/g, '') || '',
       reference: `Quran ${key}`,
       source: 'quran.com'
     };
