@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     const searchData = await response.json();
     const searchResults = searchData.search.results;
 
-    // For each result, fetch clean Arabic + specific English translation (131 = Sahih International)
+    // For each result, fetch full verse details (Arabic Uthmani + Sahih International 131)
     const results = await Promise.all(searchResults.map(async (r) => {
       try {
         const detailRes = await fetch(
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
           reference: `Quran ${r.verse_key}`
         };
       } catch (e) {
-        // Fallback to original search result data if detail fetch fails
+        // Fallback to basic snippet if detail fetch fails
         return {
           verseKey: r.verse_key,
           arabic: "", 

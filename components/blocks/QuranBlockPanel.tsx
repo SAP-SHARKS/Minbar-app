@@ -11,7 +11,7 @@ interface QuranResult {
 }
 
 interface QuranBlockPanelProps {
-  onInsert: (data: any) => void;
+  onInsert: (data: QuranResult) => void;
   editingBlock?: { verseKey: string; element: HTMLElement } | null;
   onRemoveBlock?: () => void;
   onCancelEdit?: () => void;
@@ -57,7 +57,13 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
         }
         if (!res.ok) throw new Error(`Verse ${searchTerm} not found.`);
         const data = await res.json();
-        setResults([data]);
+        // Standardize key from translation to english
+        setResults([{
+            verseKey: data.verseKey,
+            arabic: data.arabic,
+            english: data.english || data.translation,
+            reference: data.reference
+        }]);
       } else {
         const res = await fetch(`/api/quran-search?q=${encodeURIComponent(searchTerm)}`);
         if (res.status === 401 || res.status === 403) {
@@ -85,15 +91,12 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
     return () => clearTimeout(timeoutId);
   }, [query]);
 
-  const handleInsert = async (item: QuranResult) => {
+  const handleInsert = (item: QuranResult) => {
     if (!user) {
         setLoginRequired(true);
         return;
     }
-    
-    // Pass complete data to editor
     onInsert(item);
-    
     if (!editingBlock) {
         setResults([]);
         setQuery('');
