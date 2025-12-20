@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Plus, Settings, Layers, MousePointer2, Type, LayoutTemplate } from 'lucide-react';
 
@@ -36,7 +35,7 @@ export function RightSidebar({ onOpenLibrary }: RightSidebarProps) {
             `}
             title={tool.label}
           >
-            <Icon size={20} strokeWidth={isActive => isActive ? 2.5 : 2} />
+            <Icon size={20} strokeWidth={tool.primary ? 2.5 : 2} />
             
             {/* Tooltip */}
             <div className="absolute right-full mr-3 px-2 py-1 bg-gray-800 text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
