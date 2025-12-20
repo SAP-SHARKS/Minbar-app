@@ -137,6 +137,7 @@ export function KhutbahEditor({ user, khutbahId, onGoLive, onSaveNew }: KhutbahE
   const [fontSize, setFontSize] = useState(16);
   const editorRef = useRef<HTMLDivElement>(null);
   const [activeFormats, setActiveFormats] = useState<string[]>([]);
+  const savedRange = useRef<Range | null>(null);
   
   // Block Library State
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
@@ -262,13 +263,33 @@ export function KhutbahEditor({ user, khutbahId, onGoLive, onSaveNew }: KhutbahE
     }
   };
 
+  const saveSelection = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      savedRange.current = selection.getRangeAt(0).cloneRange();
+    }
+  };
+
+  const restoreSelection = () => {
+    if (savedRange.current) {
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(savedRange.current);
+      }
+    }
+  };
+
   const handleInsertBlock = (blockHtml: string) => {
+    restoreSelection();
     editorRef.current?.focus();
     document.execCommand('insertHTML', false, blockHtml);
     if (editorRef.current) {
         setContent(editorRef.current.innerHTML);
         setSaveStatus('unsaved');
     }
+    // Explicitly reset any stuck editing state
+    setSelectedBlockEl(null);
   };
 
   // LEVEL 4 Interactions
@@ -280,6 +301,7 @@ export function KhutbahEditor({ user, khutbahId, onGoLive, onSaveNew }: KhutbahE
       if (blockContainer) {
         setSelectedBlockEl(blockContainer);
         const rect = blockContainer.getBoundingClientRect();
+        const editorRect = editorRef.current?.parentElement?.getBoundingClientRect() || { top: 0, left: 0 };
         setToolbarPos({ 
           top: rect.top - 50, 
           left: rect.left + (rect.width / 2) - 100 
@@ -403,6 +425,9 @@ export function KhutbahEditor({ user, khutbahId, onGoLive, onSaveNew }: KhutbahE
                     fontSize={fontSize}
                     onFontSizeChange={setFontSize}
                     editorRef={editorRef}
+                    onMouseUp={saveSelection}
+                    onKeyUp={saveSelection}
+                    onBlur={saveSelection}
                 />
             </div>
         </div>

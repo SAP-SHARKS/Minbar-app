@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Loader2, Plus, Book, Trash2, ArrowLeft, Info, 
@@ -18,7 +17,9 @@ interface SearchResult {
   status?: string;
   title?: string;
   category?: string;
-  theme?: string; // Derived theme for Quran
+  theme?: string; 
+  surah_id?: string;
+  surah_name?: string;
 }
 
 interface GroupedResults {
@@ -30,6 +31,7 @@ interface QuranBlockPanelProps {
   editingBlock?: { verseKey: string; element: HTMLElement } | null;
   onRemoveBlock?: () => void;
   onCancelEdit?: () => void;
+  setEditingBlock?: (block: any) => void;
 }
 
 const CATEGORIES = [
@@ -40,20 +42,35 @@ const CATEGORIES = [
   { id: 'closing', label: 'Closings', icon: Anchor, color: 'purple' },
 ];
 
-export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCancelEdit }: QuranBlockPanelProps) {
-  const { user, session, setShowLoginModal } = useAuth();
+export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCancelEdit, setEditingBlock }: QuranBlockPanelProps) {
+  const { user, session } = useAuth();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [allData, setAllData] = useState<SearchResult[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState('quran');
+  const [selectedSurahFilter, setSelectedSurahFilter] = useState('');
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
 
   const showToast = (msg: string) => {
     setToast({ message: msg, visible: true });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
   };
+
+  const dynamicSurahs = useMemo(() => {
+    if (activeCategory !== 'quran') return [];
+    const surahMap = new Map<string, string>();
+    allData.forEach(r => {
+      if (r.surah_id && r.surah_name) {
+        surahMap.set(r.surah_id, r.surah_name);
+      } else if (r.verseKey) {
+        const id = r.verseKey.split(':')[0];
+        surahMap.set(id, `Surah ${id}`);
+      }
+    });
+    return Array.from(surahMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [allData, activeCategory]);
 
   const fetchDuaList = async (type: string) => {
     if (!user || !session) return;
@@ -102,7 +119,6 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
       if (!res.ok) throw new Error(data.error || "Search failed");
 
       const results = (data.results || []).map((r: any) => {
-          // Add basic theme tagging for Quran based on keywords
           if (activeCategory === 'quran') {
               const text = (r.english + r.arabic).toLowerCase();
               if (text.includes('patience') || text.includes('sabr')) r.theme = 'Patience';
@@ -115,7 +131,6 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
       
       setAllData(results);
       
-      // Auto-expand all groups on search
       const groupNames = new Set(results.map((r: any) => r.theme || r.book || r.category || 'General'));
       setExpandedGroups(new Set(groupNames as any));
 
@@ -129,6 +144,7 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
   useEffect(() => {
     setQuery('');
     setExpandedGroups(new Set());
+    setSelectedSurahFilter('');
     if (['dua', 'opening', 'closing'].includes(activeCategory)) {
         fetchDuaList(activeCategory);
     } else {
@@ -145,12 +161,15 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
 
   const groupedResults = useMemo(() => {
     const filtered = allData.filter(r => {
-        if (!query.trim()) return true;
-        const q = query.toLowerCase();
-        return (r.title?.toLowerCase().includes(q) || 
-                r.english?.toLowerCase().includes(q) || 
-                r.category?.toLowerCase().includes(q) || 
-                r.reference?.toLowerCase().includes(q));
+        const qMatch = !query.trim() || 
+                      (r.title?.toLowerCase().includes(query.toLowerCase()) || 
+                       r.english?.toLowerCase().includes(query.toLowerCase()) || 
+                       r.category?.toLowerCase().includes(query.toLowerCase()) || 
+                       r.reference?.toLowerCase().includes(query.toLowerCase()));
+        
+        const surahMatch = !selectedSurahFilter || (r.verseKey && r.verseKey.startsWith(`${selectedSurahFilter}:`));
+        
+        return qMatch && surahMatch;
     });
 
     const groups: GroupedResults = {};
@@ -160,13 +179,12 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
         groups[groupName].push(r);
     });
     
-    // Auto-expand if searching
     if (query.trim() && Object.keys(groups).length > 0) {
         setExpandedGroups(new Set(Object.keys(groups)));
     }
 
     return groups;
-  }, [allData, query]);
+  }, [allData, query, selectedSurahFilter]);
 
   const toggleGroup = (name: string) => {
     const next = new Set(expandedGroups);
@@ -178,7 +196,7 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
   const handleInsert = (item: SearchResult) => {
     onInsert(item);
     showToast("Block added ✓");
-    if (!editingBlock) setQuery('');
+    if (setEditingBlock) setEditingBlock(null);
   };
 
   const getThemeColor = () => {
@@ -189,11 +207,9 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
   const color = getThemeColor();
   const borderClass = color === 'emerald' ? 'border-emerald-500' : color === 'blue' ? 'border-blue-500' : 'border-purple-500';
   const textClass = color === 'emerald' ? 'text-emerald-600' : color === 'blue' ? 'text-blue-600' : 'text-purple-600';
-  const bgClass = color === 'emerald' ? 'bg-emerald-50' : color === 'blue' ? 'bg-blue-50' : 'bg-purple-50';
 
   return (
     <div className="flex flex-col h-full gap-4 relative">
-      {/* Search Header */}
       <div className="space-y-2">
           <div className="flex gap-1.5 p-1 bg-gray-100 rounded-xl overflow-x-auto custom-scrollbar no-scrollbar">
               {CATEGORIES.map(cat => (
@@ -207,23 +223,39 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
               ))}
           </div>
 
-          <div className="relative">
-              <input 
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder={`Search in ${activeCategory}...`}
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-              />
-              {loading ? <Loader2 className="absolute left-3 top-3 text-emerald-500 animate-spin" size={16} /> : <Search className="absolute left-3 top-3 text-gray-400" size={16} />}
+          <div className="flex flex-col gap-2">
+            <div className="relative">
+                <input 
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={`Search in ${activeCategory}...`}
+                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                />
+                {loading ? <Loader2 className="absolute left-3 top-3 text-emerald-500 animate-spin" size={16} /> : <Search className="absolute left-3 top-3 text-gray-400" size={16} />}
+            </div>
+
+            {activeCategory === 'quran' && dynamicSurahs.length > 0 && (
+              <div className="px-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Filter by Surah</label>
+                <select 
+                  value={selectedSurahFilter}
+                  onChange={(e) => setSelectedSurahFilter(e.target.value)}
+                  className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:ring-1 focus:ring-emerald-500 outline-none"
+                >
+                  <option value="">All Surahs</option>
+                  {dynamicSurahs.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
       </div>
 
       {error && <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg border border-red-100">{error}</div>}
 
-      {/* Main Collapsible List */}
       <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 pb-20">
-        {/* Fix Property 'length' and 'map' errors by explicitly typing the Object.entries result to ensure 'items' is inferred correctly */}
         {(Object.entries(groupedResults) as [string, SearchResult[]][]).map(([groupName, items]) => (
           <div key={groupName} className="border border-gray-100 rounded-xl bg-white overflow-hidden shadow-sm">
             <button 
@@ -242,6 +274,7 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
                 {items.map((item, i) => (
                   <div 
                     key={i} 
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleInsert(item)}
                     className={`group bg-white border-2 ${borderClass} rounded-lg p-3 hover:shadow-md hover:scale-[1.02] transition-all cursor-pointer flex flex-col h-full relative`}
                   >
@@ -271,7 +304,6 @@ export function QuranBlockPanel({ onInsert, editingBlock, onRemoveBlock, onCance
         )}
       </div>
 
-      {/* Toast Notification */}
       {toast.visible && (
           <div className="fixed bottom-10 right-10 bg-gray-900 text-white px-6 py-3 rounded-2xl flex items-center gap-3 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 z-[100] border border-gray-700">
               <CheckCircle2 size={18} className="text-emerald-400" />

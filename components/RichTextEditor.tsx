@@ -13,6 +13,9 @@ interface RichTextEditorProps {
   fontSize: number;
   onFontSizeChange: (size: number) => void;
   editorRef?: React.RefObject<HTMLDivElement>;
+  onMouseUp?: () => void;
+  onKeyUp?: () => void;
+  onBlur?: () => void;
 }
 
 interface ToolbarButtonProps {
@@ -90,7 +93,7 @@ export function EditorToolbar({
 }
 
 // --- Simplified Editor Component ---
-export function RichTextEditor({ content, onChange, fontSize, editorRef }: RichTextEditorProps) {
+export function RichTextEditor({ content, onChange, fontSize, editorRef, onMouseUp, onKeyUp, onBlur }: RichTextEditorProps) {
   // Use internal ref if not provided
   const internalRef = useRef<HTMLDivElement>(null);
   const ref = editorRef || internalRef;
@@ -124,6 +127,9 @@ export function RichTextEditor({ content, onChange, fontSize, editorRef }: RichT
         }}
         contentEditable
         onInput={handleInput}
+        onMouseUp={onMouseUp}
+        onKeyUp={onKeyUp}
+        onBlur={onBlur}
     />
   );
 }
