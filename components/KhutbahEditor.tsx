@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileText, Loader2, Save, Sparkles, X, LayoutList,
   PlusCircle, Trash2, ChevronUp, ChevronDown, Edit3, Palette,
-  CheckCircle2, Clock, AlignLeft, Arabic
+  CheckCircle2, Clock, AlignLeft, Languages
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { RichTextEditor, EditorToolbar } from './RichTextEditor';
@@ -281,6 +281,7 @@ export function KhutbahEditor({ user, khutbahId, onGoLive, onSaveNew }: KhutbahE
       if (blockContainer) {
         setSelectedBlockEl(blockContainer);
         const rect = blockContainer.getBoundingClientRect();
+        const editorRect = editorRef.current?.parentElement?.getBoundingClientRect() || { top: 0, left: 0 };
         setToolbarPos({ 
           top: rect.top - 50, 
           left: rect.left + (rect.width / 2) - 100 
@@ -388,8 +389,8 @@ export function KhutbahEditor({ user, khutbahId, onGoLive, onSaveNew }: KhutbahE
                   <Edit3 size={14}/> <span className="text-[10px] font-bold">EDIT</span>
                 </button>
                 <div className="w-px h-4 bg-gray-200 mx-1" />
-                <button onClick={() => handleMoveBlock('up')} className="p-2 hover:bg-gray-50 text-gray-500 rounded-md"><ChevronUp size={14}/></button>
-                <button onClick={() => handleMoveBlock('down')} className="p-2 hover:bg-gray-50 text-gray-500 rounded-md"><ChevronDown size={14}/></button>
+                <button onClick={handleMoveBlock('up')} className="p-2 hover:bg-gray-50 text-gray-500 rounded-md"><ChevronUp size={14}/></button>
+                <button onClick={handleMoveBlock('down')} className="p-2 hover:bg-gray-50 text-gray-500 rounded-md"><ChevronDown size={14}/></button>
                 <div className="w-px h-4 bg-gray-200 mx-1" />
                 <button className="p-2 hover:bg-gray-50 text-gray-500 rounded-md"><Palette size={14}/></button>
                 <div className="w-px h-4 bg-gray-200 mx-1" />
