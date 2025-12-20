@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileText, Loader2, Save, Sparkles, X, LayoutList,
@@ -73,9 +72,9 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      const block = target.closest('.khutbah-block--quran');
+      const block = target.closest('.khutbah-block--quran') || target.closest('.khutbah-block--hadith') || target.closest('.khutbah-block--dua');
       if (block) {
-        const verseKey = block.getAttribute('data-verse-key') || block.getAttribute('data-reference');
+        const verseKey = block.getAttribute('data-reference') || block.getAttribute('data-id');
         setEditingBlock({ verseKey: verseKey || '', element: block as HTMLElement });
       } else {
         if (editorRef.current?.contains(target)) {
@@ -152,15 +151,22 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
   const handleInsertQuran = (data: any) => {
     const arabic = data.arabic || "";
     const english = data.english || data.translation || "";
-    const reference = data.reference || data.verseKey || "";
+    const reference = data.reference || data.title || "";
+    const type = data.type || 'quran';
+    const status = data.status || "";
     
-    // Universal dual-language block for Quran and Hadith
+    let blockClass = 'quran-block';
+    if (type === 'hadith') blockClass = 'hadith-block';
+    else if (['dua', 'opening', 'closing'].includes(type)) blockClass = 'dua-block';
+
+    const statusHtml = status ? `<span class="status-badge status-${status.toLowerCase()}">${status}</span>` : '';
+
     const blockHtml = `
-      <div class="khutbah-block khutbah-block--quran quran-block p-6 bg-emerald-50 border-l-4 border-emerald-500 my-6 rounded-r-xl cursor-pointer hover:bg-emerald-50/80 transition-all shadow-sm group relative" data-reference="${reference}" contenteditable="false">
-        <div class="quran-ar text-3xl font-serif text-right mb-4 leading-[2] text-gray-900" dir="rtl">${arabic}</div>
-        ${english ? `<div class="quran-en text-lg text-gray-700 italic mb-2 leading-relaxed">"${english}"</div>` : ''}
-        <div class="quran-ref text-sm font-bold text-emerald-700 text-right mt-3 flex items-center justify-end gap-2">
-           <span class="h-px w-6 bg-emerald-200"></span> ${reference}
+      <div class="khutbah-block ${blockClass} p-4 rounded-lg my-6 cursor-pointer hover:shadow-md transition-all group relative" data-reference="${reference}" data-type="${type}" contenteditable="false">
+        <div class="ar-text font-serif text-right text-[18px] font-semibold leading-[2.2]" dir="rtl">${arabic}</div>
+        ${english ? `<div class="en-text text-[14px] text-gray-700 italic leading-relaxed mb-2">"${english}"</div>` : ''}
+        <div class="block-ref text-[12px] font-bold text-gray-500 text-right mt-2">
+           ${statusHtml} ${reference}
         </div>
       </div>
       <p><br></p>
@@ -170,6 +176,7 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
         editingBlock.element.outerHTML = blockHtml;
         setEditingBlock(null);
     } else {
+        // ALWAYS INSERT AT CURSOR POSITION
         editorRef.current?.focus();
         document.execCommand('insertHTML', false, blockHtml);
     }
@@ -263,7 +270,7 @@ export const KhutbahEditor: React.FC<KhutbahEditorProps> = ({ user, khutbahId, o
             className="flex-1 overflow-y-auto cursor-text scroll-smooth custom-scrollbar"
             onClick={(e) => {
                 const target = e.target as HTMLElement;
-                if (!target.closest('.khutbah-block--quran')) {
+                if (!target.closest('.khutbah-block')) {
                     editorRef.current?.focus();
                     checkFormats();
                 }

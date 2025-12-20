@@ -8,7 +8,6 @@ export default async function handler(req, res) {
   const { q } = req.query;
   if (!q || q.length < 2) return res.status(400).json({ error: 'Query too short' });
 
-  // 1. Verify Supabase Session (Auth Gate)
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -24,12 +23,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 2. Get QF OAuth Token
     const token = await getQFAccessToken();
     const baseUrl = getQFBaseUrl();
     const clientId = process.env.QURAN_CLIENT_ID_PROD;
 
-    // 3. Call QF Search API with translation 131 (The Clear Quran)
+    // Use translation 131 (The Clear Quran) and limit size to 10
     const searchUrl = `${baseUrl}/content/api/v4/search?q=${encodeURIComponent(q)}&size=10&page=1&language=en&translations=131`;
     
     const response = await fetch(searchUrl, {
@@ -41,7 +39,7 @@ export default async function handler(req, res) {
     });
 
     if (response.status === 401 || response.status === 403) {
-      return res.status(401).json({ error: 'LOGIN_REQUIRED', message: "Access denied by Quran Foundation. Please sign in again." });
+      return res.status(401).json({ error: 'LOGIN_REQUIRED', message: "Access denied by Quran Foundation." });
     }
 
     if (!response.ok) throw new Error(`QF API Error: ${response.status}`);
@@ -49,7 +47,6 @@ export default async function handler(req, res) {
     const searchData = await response.json();
     const searchResults = searchData.search?.results || [];
 
-    // 4. Transform results to normalized UI shape
     const results = searchResults.map(r => ({
       verseKey: r.verse_key,
       arabic: r.text || r.words?.map(w => w.text).join(' ') || '',
