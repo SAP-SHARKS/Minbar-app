@@ -8,7 +8,11 @@ export interface BlockItem {
   reference: string;
   title?: string;
   category?: string;
-  status?: string; // e.g., Sahih
+  status?: string; 
+  length?: 'Short' | 'Medium' | 'Long';
+  bookSlug?: string;
+  hadithNumber?: string;
+  book?: string;
   type: CategoryId;
 }
 

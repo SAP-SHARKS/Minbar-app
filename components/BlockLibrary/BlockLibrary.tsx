@@ -27,49 +27,30 @@ export function BlockLibrary({ isOpen, onClose, onInsert }: BlockLibraryProps) {
   };
 
   const handleInsertItem = (item: BlockItem) => {
-    // Determine colors based on category
-    let bgColor = '#F0FDF4';
-    let accentColor = '#10B981';
-    
-    switch(item.type) {
-      case 'hadith':
-        bgColor = '#EFF6FF';
-        accentColor = '#3B82F6';
-        break;
-      case 'opening':
-      case 'closing':
-        bgColor = '#FAF5FF';
-        accentColor = '#A855F7';
-        break;
-      case 'stories':
-        bgColor = '#FFEDD5';
-        accentColor = '#F97316';
-        break;
-      case 'quotes':
-        bgColor = '#FEF9C3';
-        accentColor = '#EAB308';
-        break;
-    }
-
+    // Wrap in dynamic container for Level 4 behavior
     const blockHTML = `
-      <div style="background: ${bgColor}; border-left: 4px solid ${accentColor}; border-radius: 8px; padding: 20px; margin: 16px 0;" contenteditable="false">
-        <div style="text-align: right; font-size: 20px; font-weight: 600; line-height: 1.8; margin-bottom: 12px; font-family: serif;" dir="rtl">
-          ${item.arabic}
-        </div>
-        <div style="font-size: 16px; font-style: italic; color: #555; margin-bottom: 12px;">
-          ${item.english}
-        </div>
-        <div style="text-align: right; font-size: 13px; color: #888; font-weight: bold; text-transform: uppercase;">
-          ${item.reference}
+      <div class="khutbah-block-container" 
+           data-block-id="${item.id}" 
+           data-block-type="${item.type}" 
+           data-block-ref="${item.reference}"
+           contenteditable="false"
+           style="position: relative; margin: 24px 0; outline: none;">
+        <div class="khutbah-block ${item.type}-block" 
+             style="cursor: pointer; transition: all 0.2s ease;">
+          <div class="ar-text" dir="rtl">${item.arabic}</div>
+          <div class="en-text">"${item.english}"</div>
+          <div class="block-ref">
+            ${item.status ? `<span class="status-badge status-${item.status.toLowerCase()}">${item.status}</span>` : ''}
+            ${item.reference}
+          </div>
         </div>
       </div>
-      <p><br></p>
+      <p contenteditable="true"><br></p>
     `;
 
     onInsert(blockHTML);
     showToast("Block added ✓");
     
-    // Close everything
     setActiveLevel(2);
     setSelectedCategory(null);
     onClose();
@@ -92,7 +73,6 @@ export function BlockLibrary({ isOpen, onClose, onInsert }: BlockLibraryProps) {
         />
       )}
 
-      {/* Insertion Toast */}
       {toast.visible && (
         <div className="fixed bottom-10 right-10 bg-gray-900 text-white px-6 py-3 rounded-2xl flex items-center gap-3 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 z-[3000] border border-gray-700">
           <CheckCircle2 size={18} className="text-emerald-400" />
