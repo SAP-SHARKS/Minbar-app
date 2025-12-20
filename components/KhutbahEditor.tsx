@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileText, Loader2, Save, Sparkles, X, LayoutList,
@@ -190,3 +189,224 @@ export function KhutbahEditor({ user, khutbahId, onGoLive, onSaveNew }: KhutbahE
       try {
           if (activeKhutbahId) {
               await supabase.from('user_khutbahs')
+                .update({ title: khutbahTitle, content: content, updated_at: new Date().toISOString() })
+                .eq('id', activeKhutbahId);
+          } else {
+              const { data, error } = await supabase.from('user_khutbahs')
+                .insert({
+                    user_id: user.id || user.uid,
+                    title: khutbahTitle,
+                    content: content,
+                    author: user.user_metadata?.full_name || 'Me',
+                    likes_count: 0
+                }).select().single();
+              if (error) throw error;
+              if (data) {
+                  setActiveKhutbahId(data.id);
+                  if (onSaveNew) onSaveNew(data.id);
+              }
+          }
+          setSaveStatus('saved');
+      } catch (err: any) {
+          alert("Failed to save: " + err.message);
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  const handleAddCard = async () => {
+    if (!activeKhutbahId) {
+        alert("Please save your khutbah first.");
+        return;
+    }
+    const nextNum = cards.length + 1;
+    const { data, error } = await supabase
+      .from('user_khutbah_cards')
+      .insert({
+        user_khutbah_id: activeKhutbahId,
+        card_number: nextNum,
+        section_label: 'MAIN',
+        title: 'New Section',
+        bullet_points: ['Key point here...']
+      })
+      .select()
+      .single();
+
+    if (data) {
+      setCards([...cards, data]);
+      setEditingCard(data);
+    }
+  };
+
+  const handleUpdateCard = async (updated: any) => {
+    setIsCardModalSaving(true);
+    try {
+      const { error } = await supabase
+        .from('user_khutbah_cards')
+        .update({
+          title: updated.title,
+          section_label: updated.section_label,
+          bullet_points: updated.bullet_points,
+          arabic_text: updated.arabic_text
+        })
+        .eq('id', updated.id);
+
+      if (error) throw error;
+
+      setCards(cards.map(c => c.id === updated.id ? updated : c));
+      setEditingCard(null);
+    } catch (err: any) {
+      alert("Error saving card: " + err.message);
+    } finally {
+      setIsCardModalSaving(false);
+    }
+  };
+
+  const handleInsertBlock = (blockHtml: string) => {
+    editorRef.current?.focus();
+    document.execCommand('insertHTML', false, blockHtml);
+    if (editorRef.current) {
+        setContent(editorRef.current.innerHTML);
+        setSaveStatus('unsaved');
+    }
+  };
+
+  // LEVEL 4 Interactions
+  useEffect(() => {
+    const handleEditorClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const blockContainer = target.closest('.khutbah-block-container') as HTMLElement;
+      
+      if (blockContainer) {
+        setSelectedBlockEl(blockContainer);
+        const rect = blockContainer.getBoundingClientRect();
+        setToolbarPos({ 
+          top: rect.top - 50, 
+          left: rect.left + (rect.width / 2) - 100 
+        });
+      } else {
+        setSelectedBlockEl(null);
+      }
+    };
+
+    const editor = editorRef.current;
+    if (editor) {
+      editor.addEventListener('click', handleEditorClick);
+      return () => editor.removeEventListener('click', handleEditorClick);
+    }
+  }, [content]);
+
+  const handleDeleteBlock = () => {
+    if (selectedBlockEl) {
+      selectedBlockEl.remove();
+      setSelectedBlockEl(null);
+      if (editorRef.current) setContent(editorRef.current.innerHTML);
+    }
+  };
+
+  const handleMoveBlock = (dir: 'up' | 'down') => {
+    if (!selectedBlockEl) return;
+    const sibling = dir === 'up' ? selectedBlockEl.previousElementSibling : selectedBlockEl.nextElementSibling;
+    if (sibling) {
+      if (dir === 'up') sibling.before(selectedBlockEl);
+      else sibling.after(selectedBlockEl);
+      if (editorRef.current) setContent(editorRef.current.innerHTML);
+      const rect = selectedBlockEl.getBoundingClientRect();
+      setToolbarPos({ top: rect.top - 50, left: rect.left + (rect.width / 2) - 100 });
+    }
+  };
+
+  return (
+    <div className="flex h-full bg-gray-50 overflow-hidden relative md:pl-20 pr-16">
+      <RightSidebar 
+        cards={cards}
+        onCardClick={(id) => {
+          setSelectedCardId(id);
+          const card = cards.find(c => c.id === id);
+          if (card) setEditingCard(card);
+        }}
+        onAddCard={() => handleAddCard()}
+        selectedCardId={selectedCardId}
+        onOpenLibrary={() => setIsLibraryOpen(true)} 
+      />
+
+      <BlockLibrary 
+        isOpen={isLibraryOpen} 
+        onClose={() => setIsLibraryOpen(false)} 
+        onInsert={handleInsertBlock}
+      />
+
+      {editingCard && (
+        <CardEditModal 
+          card={editingCard} 
+          onSave={handleUpdateCard} 
+          onClose={() => setEditingCard(null)} 
+          isSaving={isCardModalSaving}
+        />
+      )}
+
+      <div className="relative flex flex-col h-full shrink-0 z-20">
+          <LeftToolbar activeTool={activeTool} onToolSelect={setActiveTool} />
+          <LeftPanel activeTool={activeTool} onClose={() => setActiveTool(null)} />
+      </div>
+      
+      <div className="flex-1 flex flex-col min-w-0 bg-[#F9FBFD] relative">
+        <div className="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-6 shrink-0 z-10">
+            <div className="flex items-center gap-4 flex-1">
+                <input 
+                    type="text" 
+                    value={khutbahTitle}
+                    onChange={(e) => { setKhutbahTitle(e.target.value); setSaveStatus('unsaved'); }}
+                    className="font-bold text-xl text-gray-800 outline-none bg-transparent hover:bg-gray-50 rounded px-2 -ml-2 transition-colors truncate max-w-md"
+                />
+                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${saveStatus === 'unsaved' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    {saveStatus}
+                </span>
+            </div>
+            <div className="flex items-center gap-3">
+                <button onClick={() => handleSave()} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-100 transition-all">
+                    <Save size={14}/> Save
+                </button>
+            </div>
+        </div>
+
+        <div className="bg-white border-b border-gray-200 px-6 py-3 flex justify-center shrink-0 shadow-sm z-10">
+            <EditorToolbar onExec={() => {}} activeFormats={activeFormats} fontSize={fontSize} onFontSizeChange={setFontSize} />
+        </div>
+
+        <div className="flex-1 overflow-y-auto cursor-text scroll-smooth custom-scrollbar relative">
+            {selectedBlockEl && (
+              <div 
+                className="fixed z-[2000] flex items-center gap-1 bg-white border border-gray-200 shadow-xl rounded-lg p-1 animate-in fade-in slide-in-from-bottom-2 duration-200"
+                style={{ top: toolbarPos.top, left: toolbarPos.left }}
+              >
+                <button 
+                  onClick={() => setIsLibraryOpen(true)}
+                  className="p-2 hover:bg-gray-50 text-gray-600 rounded-md transition-colors flex items-center gap-1.5"
+                >
+                  <Edit3 size={14}/> <span className="text-[10px] font-bold">EDIT</span>
+                </button>
+                <div className="w-px h-4 bg-gray-200 mx-1" />
+                <button onClick={() => handleMoveBlock('up')} className="p-2 hover:bg-gray-50 text-gray-500 rounded-md"><ChevronUp size={14}/></button>
+                <button onClick={() => handleMoveBlock('down')} className="p-2 hover:bg-gray-50 text-gray-500 rounded-md"><ChevronDown size={14}/></button>
+                <div className="w-px h-4 bg-gray-200 mx-1" />
+                <button className="p-2 hover:bg-gray-50 text-gray-500 rounded-md"><Palette size={14}/></button>
+                <div className="w-px h-4 bg-gray-200 mx-1" />
+                <button onClick={() => handleDeleteBlock()} className="p-2 hover:bg-red-50 text-red-500 rounded-md transition-colors"><Trash2 size={14}/></button>
+              </div>
+            )}
+
+            <div className="flex justify-center pb-32 px-8 min-h-full py-12">
+                <RichTextEditor 
+                    content={content} 
+                    onChange={(html) => { setContent(html); setSaveStatus('unsaved'); }}
+                    fontSize={fontSize}
+                    onFontSizeChange={setFontSize}
+                    editorRef={editorRef}
+                />
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+}
