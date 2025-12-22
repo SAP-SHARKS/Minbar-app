@@ -1,6 +1,26 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
-import { KhutbahPreview, Topic, Imam } from './types';
+import { KhutbahPreview, Topic, Imam, Tag } from './types';
+
+const mapKhutbah = (item: any): KhutbahPreview => {
+  // Transform the data to have a clean tags array from the junction table join
+  const tags: Tag[] = item.khutbah_tags?.map((kt: any) => kt.tag).filter(Boolean) || [];
+  
+  return {
+    id: item.id,
+    title: item.title,
+    // Use joined imam name if available, fallback to denormalized author
+    author: item.imam?.name || item.author,
+    imam_id: item.imam?.id || item.imam_id,
+    topic: item.topic,
+    tags: tags,
+    likes: item.likes_count,
+    comments_count: item.comments_count,
+    published_at: item.created_at,
+    rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1),
+    summary: item.description || item.summary
+  };
+};
 
 export function useHomepageData() {
   const [data, setData] = useState<{
@@ -16,33 +36,33 @@ export function useHomepageData() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // We use Promise.all to fetch data in parallel
+        const querySelect = `
+          *,
+          imam:imams(id, name, slug, style, location),
+          khutbah_tags(tag:tags(id, name, slug))
+        `;
+
         const [latest, trending, classics, topics, imams] = await Promise.all([
-          // Latest
           supabase
             .from('khutbahs')
-            .select('id, title, author, topic, tags, likes_count, comments_count, created_at, rating')
+            .select(querySelect)
             .order('created_at', { ascending: false })
             .limit(6),
-          // Trending (Most Liked recently - simulated by likes for now)
           supabase
             .from('khutbahs')
-            .select('id, title, author, topic, tags, likes_count, comments_count, created_at, rating')
+            .select(querySelect)
             .order('likes_count', { ascending: false })
             .limit(6),
-          // Classics / Most Used (High engagement, older or just generally popular)
           supabase
             .from('khutbahs')
-            .select('id, title, author, topic, tags, likes_count, comments_count, created_at, rating')
-            .gt('likes_count', 10) // Mock filter for "classics"
+            .select(querySelect)
+            .gt('likes_count', 10)
             .limit(6),
-          // Topics - Increased limit to 12 to fill 2 rows of 6
           supabase
             .from('topics')
             .select('*')
             .order('khutbah_count', { ascending: false })
             .limit(12),
-          // Imams - Increased limit to 15
           supabase
             .from('imams')
             .select('*')
@@ -50,24 +70,11 @@ export function useHomepageData() {
             .limit(15),
         ]);
 
-        // Map data safely
-        const mapKhutbah = (item: any): KhutbahPreview => ({
-            id: item.id,
-            title: item.title,
-            author: item.author,
-            topic: item.topic,
-            labels: item.tags,
-            likes: item.likes_count,
-            comments_count: item.comments_count,
-            published_at: item.created_at,
-            rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1) // Mock rating
-        });
-
         setData({
           latest: (latest.data || []).map(mapKhutbah),
           trending: (trending.data || []).map(mapKhutbah),
           classics: (classics.data || []).map(mapKhutbah),
-          featured: (trending.data || []).slice(0, 3).map(mapKhutbah), // reuse trending as featured for now
+          featured: (trending.data || []).slice(0, 3).map(mapKhutbah),
           topics: (topics.data || []),
           imams: (imams.data || []),
         });
@@ -98,23 +105,24 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
 
     let query = supabase
       .from('khutbahs')
-      .select('id, title, author, topic, tags, likes_count, comments_count, created_at, rating', { count: 'exact' });
+      .select(`
+        *,
+        imam:imams(id, name, slug, style, location),
+        khutbah_tags(tag:tags(id, name, slug))
+      `, { count: 'exact' });
 
-    // Filters
     if (filters.search) {
        query = query.or(`title.ilike.%${filters.search}%,author.ilike.%${filters.search}%`);
     }
     if (filters.topic && filters.topic !== 'All') query = query.eq('topic', filters.topic);
     if (filters.imam) query = query.eq('author', filters.imam);
 
-    // Sorting
     if (filters.sort === 'trending') {
       query = query.order('likes_count', { ascending: false });
     } else {
       query = query.order('created_at', { ascending: false });
     }
 
-    // Pagination
     const from = pageNum * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
     query = query.range(from, to);
@@ -122,17 +130,7 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
     const { data: results, count: totalCount, error } = await query;
 
     if (!error && results) {
-        const mappedResults: KhutbahPreview[] = results.map((item: any) => ({
-            id: item.id,
-            title: item.title,
-            author: item.author,
-            topic: item.topic,
-            labels: item.tags,
-            likes: item.likes_count,
-            comments_count: item.comments_count,
-            published_at: item.created_at,
-            rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1)
-        }));
+        const mappedResults: KhutbahPreview[] = results.map(mapKhutbah);
 
         setData(prev => reset ? mappedResults : [...prev, ...mappedResults]);
         setCount(totalCount || 0);

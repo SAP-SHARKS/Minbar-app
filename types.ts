@@ -4,25 +4,35 @@ export interface Comment {
   date: string;
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  slug: string;
+  khutbah_count?: number;
+}
+
 export interface KhutbahPreview {
   id: string;
   title: string;
   author: string;
+  imam_id?: string;
   topic?: string;
-  labels?: string[];
+  tags?: Tag[];
   view_count?: number;
   published_at?: string;
   likes: number;
   comments_count?: number;
-  rating?: number; // Added rating
+  rating?: number;
+  summary?: string;
 }
 
 export interface Khutbah {
   id: string;
   title: string;
   author: string;
+  imam_id?: string;
   topic: string;
-  labels?: string[];
+  tags?: Tag[];
   likes: number;
   content: string;
   style: string;
@@ -30,14 +40,14 @@ export interface Khutbah {
   comments?: Comment[];
   file_url?: string;
   view_count?: number;
-  rating?: number; // Added rating
+  rating?: number;
 }
 
 export interface KhutbahCard {
   id: string;
   khutbah_id?: string;
   card_number: number;
-  section_label: string; // "INTRO", "MAIN", etc.
+  section_label: string;
   title: string;
   bullet_points: string[];
   arabic_text?: string;
@@ -61,6 +71,9 @@ export interface Imam {
   name: string;
   slug: string;
   avatar_url?: string;
+  style?: string;
+  bio?: string;
+  location?: string;
   mosque?: string;
   city?: string;
   khutbah_count: number;

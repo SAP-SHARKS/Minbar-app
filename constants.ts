@@ -54,7 +54,12 @@ export const PUBLIC_KHUTBAHS: Khutbah[] = [
       title: 'The Power of Patience', 
       author: 'Mufti Menk', 
       topic: 'Sabr', 
-      labels: ['Sabr', 'Character', 'Heart'],
+      // Fix: changed 'labels' to 'tags' and converted to Tag objects to match Khutbah type
+      tags: [
+        { id: 't1', name: 'Sabr', slug: 'sabr' },
+        { id: 't2', name: 'Character', slug: 'character' },
+        { id: 't3', name: 'Heart', slug: 'heart' }
+      ],
       likes: 1240, 
       content: "Patience is not just waiting...", 
       style: 'Spiritual',
@@ -69,7 +74,12 @@ export const PUBLIC_KHUTBAHS: Khutbah[] = [
       title: 'Navigating the Modern World', 
       author: 'Omar Suleiman', 
       topic: 'Youth', 
-      labels: ['Youth', 'Contemporary', 'Society'],
+      // Fix: changed 'labels' to 'tags' and converted to Tag objects to match Khutbah type
+      tags: [
+        { id: 't4', name: 'Youth', slug: 'youth' },
+        { id: 't5', name: 'Contemporary', slug: 'contemporary' },
+        { id: 't6', name: 'Society', slug: 'society' }
+      ],
       likes: 890, 
       content: "The youth of today face...", 
       style: 'Academic',
@@ -82,7 +92,12 @@ export const PUBLIC_KHUTBAHS: Khutbah[] = [
       title: 'Rights of Neighbors', 
       author: 'Nouman Ali Khan', 
       topic: 'Society', 
-      labels: ['Society', 'Adab', 'Fiqh'],
+      // Fix: changed 'labels' to 'tags' and converted to Tag objects to match Khutbah type
+      tags: [
+        { id: 't6', name: 'Society', slug: 'society' },
+        { id: 't7', name: 'Adab', slug: 'adab' },
+        { id: 't8', name: 'Fiqh', slug: 'fiqh' }
+      ],
       likes: 2100, 
       content: "The Quran emphasizes...", 
       style: 'Academic',
@@ -93,7 +108,12 @@ export const PUBLIC_KHUTBAHS: Khutbah[] = [
       title: 'Importance of Fajr', 
       author: 'Local Imam', 
       topic: 'Salah', 
-      labels: ['Salah', 'Discipline', 'Daily'],
+      // Fix: changed 'labels' to 'tags' and converted to Tag objects to match Khutbah type
+      tags: [
+        { id: 't9', name: 'Salah', slug: 'salah' },
+        { id: 't10', name: 'Discipline', slug: 'discipline' },
+        { id: 't11', name: 'Daily', slug: 'daily' }
+      ],
       likes: 45, 
       content: "Fajr is the hardest prayer...", 
       style: 'Spiritual',
@@ -107,7 +127,12 @@ export const PUBLIC_KHUTBAHS: Khutbah[] = [
       title: "Don't Get Angry",
       author: "Joe Bradford",
       topic: "Character",
-      labels: ["Anger", "Sunnah", "Self-Control"],
+      // Fix: changed 'labels' to 'tags' and converted to Tag objects to match Khutbah type
+      tags: [
+        { id: 't12', name: 'Anger', slug: 'anger' },
+        { id: 't13', name: 'Sunnah', slug: 'sunnah' },
+        { id: 't14', name: 'Self-Control', slug: 'self-control' }
+      ],
       likes: 540,
       style: 'Spiritual',
       comments: [],
@@ -118,7 +143,12 @@ export const PUBLIC_KHUTBAHS: Khutbah[] = [
       title: "Welcome Ramadan",
       author: "Nouman Ali Khan",
       topic: "Ramadan",
-      labels: ["Ramadan", "Quran", "Taqwa"],
+      // Fix: changed 'labels' to 'tags' and converted to Tag objects to match Khutbah type
+      tags: [
+        { id: 't15', name: 'Ramadan', slug: 'ramadan' },
+        { id: 't16', name: 'Quran', slug: 'quran' },
+        { id: 't17', name: 'Taqwa', slug: 'taqwa' }
+      ],
       likes: 3200,
       style: 'Spiritual',
       comments: [],
