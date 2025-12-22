@@ -1,176 +1,238 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
-  Search, User, Star, MapPin, ChevronRight, 
-  Loader2, AlertCircle, ArrowLeft
+  Search, ChevronLeft, User, FileText, 
+  ThumbsUp, Star, Heart, MapPin, ChevronRight,
+  Calendar, Shield, CheckCircle
 } from 'lucide-react';
-import { supabase } from '../supabaseClient';
-import ImamProfileModal from './ImamProfileModal';
+import { KhateebProfile } from '../types';
 
 interface KhateebFinderProps {
   onNavigateProfile: () => void;
-  onNavigateImam: (id: string) => void;
 }
 
-export const KhateebFinder: React.FC<KhateebFinderProps> = ({ onNavigateProfile, onNavigateImam }) => {
-    const [imams, setImams] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+export const KhateebFinder: React.FC<KhateebFinderProps> = ({ onNavigateProfile }) => {
+    // Simplified view state: either list or detail
+    const [view, setView] = useState<'list' | 'detail'>('list');
+    const [selectedKhateeb, setSelectedKhateeb] = useState<KhateebProfile | null>(null);
     const [search, setSearch] = useState("");
     const [styleFilter, setStyleFilter] = useState("All Styles");
 
-    useEffect(() => {
-        fetchImams();
-    }, []);
+    const khateebs: KhateebProfile[] = [
+        { id: 1, initial: "S", name: "Sheikh Abdullah", rating: 4.8, title: "Academic", location: "London", tags: ["Fiqh", "Family"], color: "bg-blue-100 text-blue-600", stats: { khutbahs: 142, likes: 850, reviews: 124 }, bio: "Graduate of Madinah University. Specializes in Fiqh and Youth Issues. Has served as an Imam for over 10 years in various communities across the UK.", reviewsList: [{id: 1, user: "Ali K.", rating: 5, text: "MashaAllah very knowledgeable."}, {id: 2, user: "Omar R.", rating: 4.5, text: "Excellent points, slightly long."}], khutbahsList: [{id: 1, title: "Importance of Salah", date: "Nov 2024", likes: 45}, {id: 2, title: "Rights of Parents", date: "Oct 2024", likes: 62}, {id: 3, title: "Modern Finance", date: "Sept 2024", likes: 38}] },
+        { id: 2, initial: "A", name: "Br. Ahmed Ali", rating: 3.2, title: "Motivational", location: "Manchester", tags: ["Youth", "Stories"], color: "bg-emerald-100 text-emerald-600", stats: { khutbahs: 45, likes: 320, reviews: 45 }, bio: "Youth worker and motivational speaker focusing on contemporary issues. Known for his engaging storytelling style that resonates with younger audiences.", reviewsList: [{id: 1, user: "Zaid M.", rating: 3, text: "Good energy but lacked depth."}], khutbahsList: [{id: 1, title: "Finding Purpose", date: "Dec 2024", likes: 12}, {id: 2, title: "Overcoming Anxiety", date: "Nov 2024", likes: 24}] },
+        { id: 3, initial: "K", name: "Dr. Karim H.", rating: 4.9, title: "Spiritual", location: "Birmingham", tags: ["Tafseer", "Heart"], color: "bg-purple-100 text-purple-600", stats: { khutbahs: 89, likes: 1200, reviews: 89 }, bio: "PhD in Islamic Studies. Focuses on Tazkiyah and spirituality. His khutbahs are known for being heart-softening and deeply reflective.", reviewsList: [{id: 1, user: "Hamza Y.", rating: 5, text: "Truly heart softening."}, {id: 2, user: "Bilal A.", rating: 5, text: "Best khutbah I've heard in years."}], khutbahsList: [{id: 1, title: "The Soft Heart", date: "Dec 2024", likes: 150}, {id: 2, title: "Journey to Allah", date: "Nov 2024", likes: 130}] }
+    ];
 
-    const fetchImams = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-
-            const { data, error: fetchError } = await supabase
-                .from('imams')
-                .select(`
-                    *,
-                    khutbahs:khutbahs(count),
-                    likes:imam_likes(count),
-                    reviews:imam_reviews(count)
-                `)
-                .order('name', { ascending: true });
-
-            if (fetchError) throw fetchError;
-
-            setImams(data || []);
-        } catch (err: any) {
-            console.error('Error fetching imams:', err);
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
+    const filteredKhateebs = khateebs.filter(k => k.name.toLowerCase().includes(search.toLowerCase()) || k.tags.some(t => t.toLowerCase().includes(search.toLowerCase())));
+    
+    const handleViewDetails = (k: KhateebProfile) => { 
+        setSelectedKhateeb(k); 
+        setView('detail'); 
     };
 
-    const filteredKhateebs = imams.filter(k => {
-        const matchesSearch = (k.name || '').toLowerCase().includes(search.toLowerCase()) || 
-                             (k.bio || '').toLowerCase().includes(search.toLowerCase()) ||
-                             (k.location || '').toLowerCase().includes(search.toLowerCase());
-        
-        const matchesStyle = styleFilter === "All Styles" || k.style === styleFilter;
-        
-        return matchesSearch && matchesStyle;
-    });
-
-    if (loading) {
+    const renderDetailView = () => {
+        if (!selectedKhateeb) return null;
         return (
-            <div className="flex h-full md:pl-20 bg-gray-50 items-center justify-center w-full">
-                <div className="text-center">
-                    <Loader2 size={40} className="animate-spin text-emerald-600 mx-auto mb-4" />
-                    <p className="font-bold text-gray-400 uppercase tracking-widest text-xs">Accessing Database...</p>
+            <div className="animate-in fade-in slide-in-from-right-8 duration-300 pb-20 w-full">
+                <button onClick={() => setView('list')} className="mb-6 flex items-center text-gray-500 hover:text-emerald-600 gap-2 font-medium"><ChevronLeft size={18} /> Back to Database</button>
+                
+                {/* Header Profile Card */}
+                <div className="bg-white rounded-xl border border-gray-200 p-6 md:p-8 shadow-sm mb-8 w-full">
+                    <div className="flex flex-col md:flex-row items-start gap-6">
+                        <div className={`w-20 md:w-24 h-20 md:h-24 rounded-2xl flex items-center justify-center text-3xl md:text-4xl font-bold shrink-0 ${selectedKhateeb.color}`}>
+                            {selectedKhateeb.initial}
+                        </div>
+                        <div className="flex-1 w-full">
+                            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                                <div>
+                                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">{selectedKhateeb.name}</h2>
+                                    <div className="flex items-center gap-2 text-gray-500 mb-4 text-sm md:text-base">
+                                        <span className="font-medium text-gray-900">{selectedKhateeb.title}</span>
+                                        <span>•</span>
+                                        <span className="flex items-center gap-1"><MapPin size={16}/> {selectedKhateeb.location}</span>
+                                    </div>
+                                </div>
+                                <div className="text-right w-full md:w-auto">
+                                   <div className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold uppercase inline-flex items-center gap-1">
+                                      <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Accepting Requests
+                                   </div>
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-4 md:gap-6 text-sm border-t border-gray-100 pt-4 mt-2">
+                                <div className="flex items-center gap-2">
+                                    <span className="bg-emerald-100 p-1.5 rounded-lg text-emerald-600"><FileText size={16}/></span>
+                                    <div><span className="font-bold text-gray-900 block">{selectedKhateeb.stats.khutbahs}</span> <span className="text-gray-500 text-xs">Khutbahs</span></div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="bg-blue-100 p-1.5 rounded-lg text-blue-600"><ThumbsUp size={16}/></span>
+                                    <div><span className="font-bold text-gray-900 block">{selectedKhateeb.stats.likes}</span> <span className="text-gray-500 text-xs">Likes</span></div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="bg-yellow-100 p-1.5 rounded-lg text-yellow-600"><Star size={16}/></span>
+                                    <div><span className="font-bold text-gray-900 block">{selectedKhateeb.rating}</span> <span className="text-gray-500 text-xs">Rating</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full">
+                    {/* Main Content: Bio, Khutbahs, Reviews */}
+                    <div className="lg:col-span-2 space-y-8 min-w-0">
+                        
+                        {/* Bio Section */}
+                        <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-200 shadow-sm">
+                            <h3 className="font-bold text-gray-900 text-xl mb-4">About</h3>
+                            <p className="text-gray-600 leading-relaxed text-base md:text-lg">{selectedKhateeb.bio}</p>
+                            <div className="mt-6">
+                                <h4 className="font-bold text-gray-900 text-sm mb-3">Topics of Expertise</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedKhateeb.tags.map(t => (
+                                        <span key={t} className="bg-gray-100 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700">{t}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Recorded Khutbahs */}
+                        <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-200 shadow-sm">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-gray-900 text-xl">Recorded Khutbahs</h3>
+                                <button className="text-emerald-600 text-sm font-bold hover:underline">View All</button>
+                            </div>
+                            <div className="space-y-4">
+                                {selectedKhateeb.khutbahsList.map(item => (
+                                    <div key={item.id} className="group flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all cursor-pointer">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                                <FileText size={18} />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h4 className="font-bold text-gray-900 group-hover:text-emerald-700 transition-colors truncate">{item.title}</h4>
+                                                <span className="text-xs text-gray-500">{item.date}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 text-gray-500 text-sm shrink-0">
+                                            <span className="flex items-center gap-1"><Heart size={14}/> {item.likes}</span>
+                                            <ChevronRight size={16} className="text-gray-300 group-hover:text-emerald-500"/>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Reviews */}
+                        <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-200 shadow-sm">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-gray-900 text-xl">Community Reviews</h3>
+                                <div className="flex items-center gap-1 bg-yellow-50 text-yellow-700 px-3 py-1 rounded-lg font-bold">
+                                    <Star size={16} fill="currentColor"/> {selectedKhateeb.rating} <span className="text-yellow-600/60 font-normal">({selectedKhateeb.stats.reviews})</span>
+                                </div>
+                            </div>
+                            <div className="space-y-6">
+                                {selectedKhateeb.reviewsList.map(review => (
+                                    <div key={review.id} className="border-b border-gray-100 last:border-0 pb-6 last:pb-0">
+                                        <div className="flex justify-between mb-2">
+                                            <span className="font-bold text-gray-900">{review.user}</span>
+                                            <div className="flex gap-0.5">
+                                                {[...Array(5)].map((_, i) => (
+                                                    <Star key={i} size={12} className={i < Math.floor(review.rating) ? "text-yellow-400 fill-current" : "text-gray-300"} />
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <p className="text-gray-600 italic">"{review.text}"</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                    </div>
+
+                    {/* Sidebar: Booking Info */}
+                    <div className="lg:col-span-1 space-y-6">
+                        <div className="bg-emerald-50 p-6 md:p-8 rounded-xl border border-emerald-100 sticky top-6">
+                            <h4 className="font-bold text-emerald-900 mb-6 text-lg flex items-center gap-2">
+                                <Calendar size={20}/> Booking Information
+                            </h4>
+                            
+                            <div className="space-y-4 mb-8">
+                                <div className="flex justify-between items-center pb-3 border-b border-emerald-100">
+                                    <span className="text-emerald-700 text-sm">Travel Radius</span>
+                                    <span className="font-bold text-emerald-900">50 Miles</span>
+                                </div>
+                                <div className="flex justify-between items-center pb-3 border-b border-emerald-100">
+                                    <span className="text-emerald-700 text-sm">Minimum Notice</span>
+                                    <span className="font-bold text-emerald-900">2 Weeks</span>
+                                </div>
+                                <div className="flex justify-between items-center pb-3 border-b border-emerald-100">
+                                    <span className="text-emerald-700 text-sm">Honorarium</span>
+                                    <span className="font-bold text-emerald-900 text-right">£150 - £300</span>
+                                </div>
+                            </div>
+
+                            <button className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all transform active:scale-95 flex items-center justify-center gap-2">
+                                Request Booking
+                            </button>
+                            <p className="text-xs text-emerald-600/80 text-center mt-4">
+                                Typical response time: Within 24 hours
+                            </p>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                            <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <Shield size={16} className="text-gray-400"/> Verification
+                            </h4>
+                            <ul className="space-y-3">
+                                <li className="flex items-center gap-2 text-sm text-gray-600">
+                                    <CheckCircle size={16} className="text-emerald-500"/> Identity Verified
+                                </li>
+                                <li className="flex items-center gap-2 text-sm text-gray-600">
+                                    <CheckCircle size={16} className="text-emerald-500"/> Background Check
+                                </li>
+                                <li className="flex items-center gap-2 text-sm text-gray-600">
+                                    <CheckCircle size={16} className="text-emerald-500"/> References Checked
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
-        );
+        )
     }
 
     return (
         <div className="flex h-full md:pl-20 bg-gray-50 overflow-y-auto w-full">
             <div className="page-container py-8 xl:py-12">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-4">
-                    <div>
-                        <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tighter mb-1">Khateeb Global DB</h1>
-                        <p className="text-gray-500 font-medium">Connect with learned speakers from across the Ummah.</p>
-                    </div>
-                    <button onClick={onNavigateProfile} className="flex items-center gap-2 bg-white border border-gray-200 text-gray-800 px-6 py-3 rounded-2xl font-bold shadow-sm hover:bg-gray-50 transition-all w-full sm:w-auto justify-center">
-                        <User size={18} className="text-emerald-500" /> My Public Profile
-                    </button>
-                </div>
-
-                {/* Filters */}
-                <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100 mb-10 flex flex-col md:flex-row gap-2">
-                    <div className="flex-1 relative">
-                        <Search className="absolute left-4 top-4 text-gray-400" size={20} />
-                        <input 
-                            type="text" 
-                            placeholder="Search by name, topic, or location..." 
-                            value={search} 
-                            onChange={(e) => setSearch(e.target.value)} 
-                            className="w-full pl-12 pr-4 py-4 bg-transparent outline-none font-bold text-gray-800 placeholder-gray-300"
-                        />
-                    </div>
-                    <div className="flex gap-2 p-1 bg-gray-50 rounded-xl">
-                        <select 
-                            value={styleFilter} 
-                            onChange={(e) => setStyleFilter(e.target.value)} 
-                            className="bg-white border border-gray-100 rounded-lg px-4 py-2 text-xs font-black uppercase tracking-widest text-gray-600 outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                        >
-                            <option>All Styles</option>
-                            <option>Scholar</option>
-                            <option>Academic</option>
-                            <option>Motivational</option>
-                            <option>Spiritual</option>
-                            <option>Youth</option>
-                        </select>
-                    </div>
-                </div>
-
-                {filteredKhateebs.length === 0 ? (
-                    <div className="text-center py-24 bg-white rounded-3xl border-2 border-dashed border-gray-100">
-                        <Search size={64} className="mx-auto mb-6 text-gray-200" />
-                        <h3 className="text-xl font-bold text-gray-400 uppercase tracking-widest">No Matches Found</h3>
-                        <button onClick={() => {setSearch(""); setStyleFilter("All Styles");}} className="mt-4 text-emerald-600 font-black text-xs uppercase hover:underline">Clear all filters</button>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
-                        {filteredKhateebs.map(k => (
-                            <div 
-                                key={k.id} 
-                                onClick={() => onNavigateImam(k.id)} 
-                                className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm hover:shadow-2xl transition-all cursor-pointer group hover:-translate-y-1 relative overflow-hidden"
-                            >
-                                <div className="flex items-center gap-4 mb-5">
-                                    {/* Compact Avatar */}
-                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black shadow-inner shrink-0 ${k.avatar_url ? 'bg-gray-100' : 'bg-emerald-50 text-emerald-600'}`}>
-                                        {k.avatar_url ? <img src={k.avatar_url} className="w-full h-full object-cover rounded-2xl" alt="" /> : k.name?.[0].toUpperCase()}
-                                    </div>
-                                    
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="text-lg font-black text-gray-900 truncate group-hover:text-emerald-600 transition-colors uppercase tracking-tighter leading-tight">
-                                            {k.name}
-                                        </h3>
-                                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest truncate">{k.style || 'Scholar'}</p>
-                                    </div>
-
-                                    <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter border border-amber-100 shrink-0">
-                                        <Star size={12} fill="currentColor" /> {k.rating || '4.8'}
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 mb-5 uppercase tracking-widest">
-                                    <MapPin size={14} className="text-gray-300"/> <span className="truncate">{k.location || 'Remote'}</span>
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-1 py-3 border-y border-gray-50 mb-5">
-                                    <div className="text-center">
-                                        <span className="block font-black text-gray-900 text-sm leading-none">{k.khutbahs?.[0]?.count || 0}</span>
-                                        <span className="block text-[8px] font-black text-gray-300 uppercase tracking-widest mt-1">Sermons</span>
-                                    </div>
-                                    <div className="text-center border-x border-gray-50">
-                                        <span className="block font-black text-gray-900 text-sm leading-none">{k.likes?.[0]?.count || 0}</span>
-                                        <span className="block text-[8px] font-black text-gray-300 uppercase tracking-widest mt-1">Likes</span>
-                                    </div>
-                                    <div className="text-center">
-                                        <span className="block font-black text-gray-900 text-sm leading-none">{k.reviews?.[0]?.count || 0}</span>
-                                        <span className="block text-[8px] font-black text-gray-300 uppercase tracking-widest mt-1">Reviews</span>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                    <span className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em] group-hover:text-emerald-600 transition-colors">View Profile</span>
-                                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-emerald-500 group-hover:text-white transition-all shadow-sm">
-                                        <ChevronRight size={16} />
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+                {view === 'list' && (
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 w-full">
+                        <div><h2 className="text-3xl font-bold text-gray-900">Khateeb Database</h2><p className="text-gray-500 mt-1">Global directory of speakers and scholars.</p></div>
+                        <button onClick={onNavigateProfile} className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:bg-emerald-700 transition-colors w-full sm:w-auto justify-center"><User size={18} /> My Profile</button>
                     </div>
                 )}
+                
+                {view === 'list' ? (
+                    <div className="w-full">
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-8 flex flex-col md:flex-row gap-4 w-full">
+                            <div className="flex-1 relative"><Search className="absolute left-3 top-3 text-gray-400" size={20} /><input type="text" placeholder="Search by name or topic..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 transition-all"/></div>
+                            <div className="flex gap-4"><select value={styleFilter} onChange={(e) => setStyleFilter(e.target.value)} className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none text-gray-700 cursor-pointer hover:bg-gray-100 w-full md:w-auto"><option>All Styles</option><option>Academic</option><option>Motivational</option><option>Spiritual</option></select></div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12 w-full">
+                            {filteredKhateebs.map(k => (
+                                <div key={k.id} onClick={() => handleViewDetails(k)} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-lg transition-all flex flex-col cursor-pointer group hover:-translate-y-1 w-full">
+                                    <div className="flex justify-between items-start mb-4"><div className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold ${k.color}`}>{k.initial}</div><div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded text-sm font-bold"><Star size={14} fill="currentColor" /> {k.rating}</div></div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-emerald-600 transition-colors truncate">{k.name}</h3>
+                                    <div className="flex items-center gap-2 text-sm text-gray-500 mb-4"><span>{k.title}</span><span>•</span><span className="flex items-center gap-1"><MapPin size={12}/> {k.location}</span></div>
+                                    <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-4 text-xs font-bold text-gray-600"><div className="flex flex-col items-center"><span className="text-gray-900 text-sm">{k.stats.khutbahs}</span><span>Khutbahs</span></div><div className="w-px h-6 bg-gray-200"></div><div className="flex flex-col items-center"><span className="text-gray-900 text-sm">{k.stats.likes}</span><span>Likes</span></div><div className="w-px h-6 bg-gray-200"></div><div className="flex flex-col items-center"><span className="text-gray-900 text-sm">{k.stats.reviews}</span><span className="underline decoration-dotted">Reviews</span></div></div>
+                                    <div className="mt-auto flex items-center justify-between pt-4 border-t border-gray-50">
+                                        <span className="text-gray-500 text-sm font-medium group-hover:text-gray-900">View Details</span>
+                                        <button className="text-emerald-600 font-bold text-sm hover:text-emerald-700 hover:underline">Request Booking</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : (renderDetailView())}
             </div>
         </div>
     );

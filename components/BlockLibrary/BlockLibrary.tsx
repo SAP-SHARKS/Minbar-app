@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Level2Panel } from './Level2Panel';
 import { Level3Modal } from './Level3Modal';
@@ -56,7 +57,7 @@ export function BlockLibrary({ isOpen, onClose, onInsert }: BlockLibraryProps) {
   };
 
   return (
-    <div onMouseDown={(e) => e.preventDefault()}>
+    <>
       <Level2Panel 
         isOpen={isOpen && activeLevel === 2} 
         onClose={onClose}
@@ -78,6 +79,6 @@ export function BlockLibrary({ isOpen, onClose, onInsert }: BlockLibraryProps) {
           <span className="font-bold text-sm tracking-wide">{toast.message}</span>
         </div>
       )}
-    </div>
+    </>
   );
 }

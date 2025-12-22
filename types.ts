@@ -8,21 +8,19 @@ export interface KhutbahPreview {
   id: string;
   title: string;
   author: string;
-  imam_id?: string; // Added for modal support
   topic?: string;
   labels?: string[];
   view_count?: number;
   published_at?: string;
   likes: number;
   comments_count?: number;
-  rating?: number;
+  rating?: number; // Added rating
 }
 
 export interface Khutbah {
   id: string;
   title: string;
   author: string;
-  imam_id?: string; // Added for modal support
   topic: string;
   labels?: string[];
   likes: number;
@@ -32,14 +30,14 @@ export interface Khutbah {
   comments?: Comment[];
   file_url?: string;
   view_count?: number;
-  rating?: number;
+  rating?: number; // Added rating
 }
 
 export interface KhutbahCard {
   id: string;
   khutbah_id?: string;
   card_number: number;
-  section_label: string;
+  section_label: string; // "INTRO", "MAIN", etc.
   title: string;
   bullet_points: string[];
   arabic_text?: string;
@@ -63,9 +61,6 @@ export interface Imam {
   name: string;
   slug: string;
   avatar_url?: string;
-  style?: string;
-  bio?: string;
-  location?: string;
   mosque?: string;
   city?: string;
   khutbah_count: number;

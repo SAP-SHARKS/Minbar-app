@@ -16,9 +16,6 @@ import { MyKhutbahs } from './components/MyKhutbahs';
 import { UserMenu } from './components/UserMenu';
 import { useAuth } from './contexts/AuthContext';
 import { LoginModal } from './components/LoginModal';
-import { ImamProfile } from './components/ImamProfile';
-import { ImamDetails } from './components/ImamDetails';
-import { TopicPage } from './components/TopicPage';
 
 export default function App() {
   const { user, isLoading } = useAuth();
@@ -27,36 +24,6 @@ export default function App() {
   // Navigation State
   const [liveKhutbahId, setLiveKhutbahId] = useState<string | null>(null);
   const [editorKhutbahId, setEditorKhutbahId] = useState<string | null>(null);
-  const [selectedImamId, setSelectedImamId] = useState<string | null>(null);
-  const [selectedTopicName, setSelectedTopicName] = useState<string | null>(null);
-  const [librarySelectedKhutbahId, setLibrarySelectedKhutbahId] = useState<string | null>(null);
-
-  // Helper to change tab and clear sub-state
-  const navigateToTab = (tab: string) => {
-    setActiveTab(tab);
-    if (tab !== 'imam-profile' && tab !== 'imam-details' && tab !== 'topic-view' && tab !== 'dashboard') {
-      setSelectedImamId(null);
-      setSelectedTopicName(null);
-      setLibrarySelectedKhutbahId(null);
-    }
-  };
-
-  const handleNavigateImam = (id: string) => {
-    setSelectedImamId(id);
-    setSelectedTopicName(null);
-    setActiveTab('imam-profile');
-  };
-
-  const handleNavigateTopic = (name: string) => {
-    setSelectedTopicName(name);
-    setSelectedImamId(null);
-    setActiveTab('topic-view');
-  };
-
-  const handleViewImamDetails = (id: string) => {
-    setSelectedImamId(id);
-    setActiveTab('imam-details');
-  };
 
   // Supabase Diagnostics
   useEffect(() => {
@@ -77,7 +44,7 @@ export default function App() {
       {/* Global Modal */}
       <LoginModal />
 
-      <Navigation activeTab={activeTab} setActiveTab={navigateToTab} unreadCount={2} />
+      <Navigation activeTab={activeTab} setActiveTab={setActiveTab} unreadCount={2} />
 
       {activeTab !== 'live' && (
         <div className="fixed top-0 md:left-20 left-0 right-0 h-14 bg-gray-900 text-white flex items-center justify-between px-6 z-20 text-xs shadow-md w-auto">
@@ -106,8 +73,6 @@ export default function App() {
                setEditorKhutbahId(id);
                setActiveTab('editor');
             }}
-            onNavigateImam={handleNavigateImam}
-            onNavigateTopic={handleNavigateTopic}
           />
         )}
         
@@ -145,37 +110,6 @@ export default function App() {
         {activeTab === 'practice' && <PracticeCoach user={user} />}
         {activeTab === 'learn' && <LearningSection user={user} />}
         
-        {activeTab === 'imam-profile' && selectedImamId && (
-          <ImamProfile 
-            imamId={selectedImamId} 
-            onBack={() => setActiveTab('finder')}
-            onViewDetails={() => setActiveTab('imam-details')}
-            onNavigateImam={handleNavigateImam}
-          />
-        )}
-
-        {activeTab === 'imam-details' && selectedImamId && (
-          <ImamDetails 
-            imamId={selectedImamId} 
-            onBack={() => setActiveTab('imam-profile')}
-          />
-        )}
-
-        {activeTab === 'topic-view' && selectedTopicName && (
-          <TopicPage 
-            topicName={selectedTopicName}
-            onBack={() => setActiveTab('dashboard')}
-            onSelectKhutbah={(id) => {
-              // Trigger detail view logic within Library if possible, 
-              // but for now simplest is to pass the state to Library and switch back
-              setLibrarySelectedKhutbahId(id);
-              setActiveTab('dashboard');
-            }}
-            onNavigateImam={handleNavigateImam}
-            onNavigateTopic={handleNavigateTopic}
-          />
-        )}
-
         {activeTab === 'live' && (
           <LiveMinbar 
             user={user} 
@@ -189,7 +123,7 @@ export default function App() {
         
         {activeTab === 'messages' && <MessageCenter />}
         {activeTab === 'profile' && <ProfileManager user={user} />}
-        {activeTab === 'finder' && <KhateebFinder onNavigateImam={handleNavigateImam} onNavigateProfile={() => setActiveTab('profile')} />}
+        {activeTab === 'finder' && <KhateebFinder onNavigateProfile={() => setActiveTab('profile')} />}
         {activeTab === 'upload' && <KhutbahUpload onSuccess={() => setActiveTab('dashboard')} />}
       </main>
     </div>
