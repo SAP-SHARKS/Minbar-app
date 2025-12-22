@@ -1,22 +1,23 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Phone, Video, MoreVertical, 
-  Send, Paperclip, Smile, ArrowLeft, Check, CheckCheck
+  Send, Paperclip, Smile, ArrowLeft, Check, CheckCheck, Loader2
 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
 
-// --- TYPES (Matching Supabase Schema) ---
+// --- TYPES ---
 
 interface Conversation {
   id: string;
   participant_1_id: string;
   participant_1_name: string;
-  participant_2_id: string; // The other person
+  participant_2_id: string;
   participant_2_name: string;
   last_message: string;
-  last_message_at: string; // Timestamp
+  last_message_at: string;
   unread_count: number;
-  avatar_color?: string; // UI helper
+  avatar_color?: string;
 }
 
 interface Message {
@@ -25,169 +26,184 @@ interface Message {
   sender_id: string;
   sender_name: string;
   content: string;
-  created_at: string; // Timestamp
+  created_at: string;
   is_read: boolean;
 }
 
-// --- MOCK DATA ---
-
-const CURRENT_USER_ID = "user_me";
-
-const INITIAL_CONVERSATIONS: Conversation[] = [
-  {
-    id: "conv_1",
-    participant_1_id: "admin_1",
-    participant_1_name: "Masjid Al-Huda Admin",
-    participant_2_id: CURRENT_USER_ID,
-    participant_2_name: "Me",
-    last_message: "Could you confirm the topic for Friday?",
-    last_message_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
-    unread_count: 1,
-    avatar_color: "bg-emerald-100 text-emerald-700"
-  },
-  {
-    id: "conv_2",
-    participant_1_id: "board_1",
-    participant_1_name: "Islamic Center Board",
-    participant_2_id: CURRENT_USER_ID,
-    participant_2_name: "Me",
-    last_message: "JazakAllah Khair for last week.",
-    last_message_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // Yesterday
-    unread_count: 0,
-    avatar_color: "bg-blue-100 text-blue-700"
-  },
-  {
-    id: "conv_3",
-    participant_1_id: "student_1",
-    participant_1_name: "Zaid (MSA President)",
-    participant_2_id: CURRENT_USER_ID,
-    participant_2_name: "Me",
-    last_message: "We have setup the projector.",
-    last_message_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
-    unread_count: 0,
-    avatar_color: "bg-purple-100 text-purple-700"
-  }
-];
-
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: "msg_1",
-    conversation_id: "conv_1",
-    sender_id: "admin_1",
-    sender_name: "Masjid Al-Huda Admin",
-    content: "Assalamu Alaikum Sheikh, we are looking forward to your Khutbah.",
-    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    is_read: true
-  },
-  {
-    id: "msg_2",
-    conversation_id: "conv_1",
-    sender_id: CURRENT_USER_ID,
-    sender_name: "Me",
-    content: "Wa Alaikum Assalam. I am preparing it now. It will be about Community building.",
-    created_at: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    is_read: true
-  },
-  {
-    id: "msg_3",
-    conversation_id: "conv_1",
-    sender_id: "admin_1",
-    sender_name: "Masjid Al-Huda Admin",
-    content: "Could you confirm the topic for Friday?",
-    created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    is_read: false
-  },
-  {
-    id: "msg_4",
-    conversation_id: "conv_2",
-    sender_id: "board_1",
-    sender_name: "Islamic Center Board",
-    content: "JazakAllah Khair for last week.",
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    is_read: true
-  }
-];
-
 export const MessageCenter = () => {
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const { user } = useAuth();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
+  const [loadingConvs, setLoadingConvs] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [mobileShowChat, setMobileShowChat] = useState(false);
 
-  // Derive active conversation and its messages
-  const activeConversation = conversations.find(c => c.id === selectedConvId);
-  const activeMessages = messages.filter(m => m.conversation_id === selectedConvId);
-
-  // Scroll to bottom on new message
+  // --- Fetch Conversations ---
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeMessages]);
+    if (!user) return;
 
-  // Handle sending a message
-  const handleSendMessage = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!inputText.trim() || !selectedConvId) return;
+    const fetchConversations = async () => {
+      setLoadingConvs(true);
+      try {
+        const userId = user.id;
+        // In a real app, you'd filter by user participation. 
+        // Here we fetch all conversations this user is part of.
+        const { data, error } = await supabase
+          .from('conversations')
+          .select('*')
+          .or(`participant_1_id.eq.${userId},participant_2_id.eq.${userId}`)
+          .order('last_message_at', { ascending: false });
 
-    const newMessage: Message = {
-      id: `msg_${Date.now()}`,
-      conversation_id: selectedConvId,
-      sender_id: CURRENT_USER_ID,
-      sender_name: "Me",
-      content: inputText,
-      created_at: new Date().toISOString(),
-      is_read: false
+        if (error) throw error;
+        
+        // Add dynamic avatar colors for UI
+        const mapped = (data || []).map((c, i) => ({
+          ...c,
+          avatar_color: i % 2 === 0 ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+        }));
+        
+        setConversations(mapped);
+      } catch (err) {
+        console.error("Error fetching conversations:", err);
+      } finally {
+        setLoadingConvs(false);
+      }
     };
 
-    // 1. Add message to list
-    setMessages(prev => [...prev, newMessage]);
+    fetchConversations();
 
-    // 2. Update conversation last_message and move to top
-    setConversations(prev => {
-      const updated = prev.map(c => 
-        c.id === selectedConvId 
-          ? { ...c, last_message: inputText, last_message_at: new Date().toISOString() }
-          : c
-      );
-      return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
-    });
+    // Subscribe to conversation updates
+    const channel = supabase
+      .channel('conversations-channel')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, (payload) => {
+          setConversations(prev => {
+              const updated = prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c);
+              return [...updated].sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
+          });
+      })
+      .subscribe();
 
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
+  // --- Fetch Messages for Selected Conversation ---
+  useEffect(() => {
+    if (!selectedConvId) {
+      setMessages([]);
+      return;
+    }
+
+    const fetchMessages = async () => {
+      setLoadingMessages(true);
+      try {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', selectedConvId)
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        setMessages(data || []);
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+      } finally {
+        setLoadingMessages(false);
+      }
+    };
+
+    fetchMessages();
+
+    // Subscribe to new messages
+    const channel = supabase
+      .channel(`room-${selectedConvId}`)
+      .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `conversation_id=eq.${selectedConvId}`
+      }, (payload) => {
+          setMessages(prev => {
+              // Prevent duplicates from local state optimistic updates
+              if (prev.find(m => m.id === payload.new.id)) return prev;
+              return [...prev, payload.new as Message];
+          });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [selectedConvId]);
+
+  // Scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!inputText.trim() || !selectedConvId || !user) return;
+
+    const currentText = inputText.trim();
     setInputText("");
 
-    // 3. SIMULATE REALTIME RESPONSE (Mocking Supabase Realtime)
-    setTimeout(() => {
-      const replyText = "JazakAllah Khair, I received your message.";
-      const replyMsg: Message = {
-        id: `msg_${Date.now() + 1}`,
+    try {
+      const newMessage = {
         conversation_id: selectedConvId,
-        sender_id: "other",
-        sender_name: activeConversation?.participant_1_name || "User",
-        content: replyText,
+        sender_id: user.id,
+        sender_name: user.user_metadata?.full_name || 'Me',
+        content: currentText,
         created_at: new Date().toISOString(),
         is_read: false
       };
-      
-      setMessages(prev => [...prev, replyMsg]);
-      setConversations(prev => {
-        const updated = prev.map(c => 
-          c.id === selectedConvId 
-            ? { ...c, last_message: replyText, last_message_at: new Date().toISOString() }
-            : c
-        );
-        return updated.sort((a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime());
-      });
-    }, 2000);
+
+      // Optimistic Update
+      const optimisticId = `temp-${Date.now()}`;
+      setMessages(prev => [...prev, { ...newMessage, id: optimisticId }]);
+
+      const { data, error } = await supabase
+        .from('messages')
+        .insert(newMessage)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Replace optimistic message with real one
+      setMessages(prev => prev.map(m => m.id === optimisticId ? data : m));
+
+      // Update the conversation's last_message preview
+      await supabase
+        .from('conversations')
+        .update({ 
+          last_message: currentText, 
+          last_message_at: new Date().toISOString() 
+        })
+        .eq('id', selectedConvId);
+
+    } catch (err) {
+      console.error("Error sending message:", err);
+      alert("Failed to send message.");
+    }
   };
 
   const handleSelectConversation = (id: string) => {
     setSelectedConvId(id);
     setMobileShowChat(true);
-    // Mark as read logic would go here (Supabase update)
+    // Mark as read in UI
     setConversations(prev => prev.map(c => c.id === id ? { ...c, unread_count: 0 } : c));
   };
 
+  const filteredConversations = conversations.filter(c => 
+    c.participant_1_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.participant_2_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const activeConversation = conversations.find(c => c.id === selectedConvId);
   const formatTime = (isoString: string) => {
+    if (!isoString) return "";
     const date = new Date(isoString);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
@@ -215,44 +231,60 @@ export const MessageCenter = () => {
             <input 
               type="text" 
               placeholder="Search conversations..." 
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
             />
           </div>
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto">
-          {conversations.map(conv => (
-            <div 
-              key={conv.id}
-              onClick={() => handleSelectConversation(conv.id)}
-              className={`p-4 border-b border-gray-50 cursor-pointer transition-colors flex gap-4 hover:bg-gray-50 ${selectedConvId === conv.id ? 'bg-emerald-50/50' : ''}`}
-            >
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0 ${conv.avatar_color || 'bg-gray-200 text-gray-600'}`}>
-                {conv.participant_1_name.charAt(0)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-baseline mb-1">
-                  <h4 className={`font-bold text-sm truncate ${conv.unread_count > 0 ? 'text-gray-900' : 'text-gray-700'}`}>
-                    {conv.participant_1_name}
-                  </h4>
-                  <span className={`text-xs ${conv.unread_count > 0 ? 'text-emerald-600 font-bold' : 'text-gray-400'}`}>
-                    {formatTime(conv.last_message_at)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <p className={`text-sm truncate ${conv.unread_count > 0 ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>
-                    {conv.last_message}
-                  </p>
-                  {conv.unread_count > 0 && (
-                    <span className="ml-2 w-5 h-5 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                      {conv.unread_count}
-                    </span>
-                  )}
-                </div>
-              </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {loadingConvs ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+               <Loader2 className="animate-spin mb-2" size={24} />
+               <span className="text-xs font-bold uppercase tracking-widest">Loading Chats</span>
             </div>
-          ))}
+          ) : filteredConversations.length > 0 ? (
+            filteredConversations.map(conv => {
+              const otherName = user?.id === conv.participant_1_id ? conv.participant_2_name : conv.participant_1_name;
+              return (
+                <div 
+                  key={conv.id}
+                  onClick={() => handleSelectConversation(conv.id)}
+                  className={`p-4 border-b border-gray-50 cursor-pointer transition-colors flex gap-4 hover:bg-gray-50 ${selectedConvId === conv.id ? 'bg-emerald-50/50' : ''}`}
+                >
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shrink-0 ${conv.avatar_color || 'bg-gray-200 text-gray-600'}`}>
+                    {otherName.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline mb-1">
+                      <h4 className={`font-bold text-sm truncate ${conv.unread_count > 0 ? 'text-gray-900' : 'text-gray-700'}`}>
+                        {otherName}
+                      </h4>
+                      <span className={`text-xs ${conv.unread_count > 0 ? 'text-emerald-600 font-bold' : 'text-gray-400'}`}>
+                        {formatTime(conv.last_message_at)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <p className={`text-sm truncate ${conv.unread_count > 0 ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>
+                        {conv.last_message || "No messages yet"}
+                      </p>
+                      {conv.unread_count > 0 && (
+                        <span className="ml-2 w-5 h-5 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                          {conv.unread_count}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-12 px-6">
+                <p className="text-sm text-gray-400">No conversations found.</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -265,19 +297,21 @@ export const MessageCenter = () => {
         {selectedConvId ? (
           <>
             {/* Chat Header */}
-            <div className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 shadow-sm z-20">
+            <div className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6 shadow-sm z-20 shrink-0">
               <div className="flex items-center gap-3">
                 <button onClick={() => setMobileShowChat(false)} className="md:hidden p-2 -ml-2 text-gray-600">
                    <ArrowLeft size={20} />
                 </button>
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${activeConversation?.avatar_color}`}>
-                  {activeConversation?.participant_1_name.charAt(0)}
+                  {(user?.id === activeConversation?.participant_1_id ? activeConversation?.participant_2_name : activeConversation?.participant_1_name)?.charAt(0)}
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-800 text-sm md:text-base">{activeConversation?.participant_1_name}</h3>
+                  <h3 className="font-bold text-gray-800 text-sm md:text-base">
+                    {user?.id === activeConversation?.participant_1_id ? activeConversation?.participant_2_name : activeConversation?.participant_1_name}
+                  </h3>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                    <span className="text-xs text-gray-500">Online</span>
+                    <span className="text-xs text-gray-500">Live Connection</span>
                   </div>
                 </div>
               </div>
@@ -290,8 +324,12 @@ export const MessageCenter = () => {
 
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 md:space-y-6" style={{ backgroundImage: 'radial-gradient(#CBD5E1 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
-              {activeMessages.map((msg) => {
-                const isMe = msg.sender_id === CURRENT_USER_ID;
+              {loadingMessages ? (
+                <div className="flex items-center justify-center h-full text-gray-400">
+                  <Loader2 size={32} className="animate-spin" />
+                </div>
+              ) : messages.map((msg) => {
+                const isMe = msg.sender_id === user?.id;
                 return (
                   <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <div className={`
@@ -301,7 +339,7 @@ export const MessageCenter = () => {
                         : 'bg-white text-gray-800 rounded-bl-none border border-gray-100'
                       }
                     `}>
-                      <p className="text-sm md:text-base leading-relaxed">{msg.content}</p>
+                      <p className="text-sm md:text-base leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                       <div className={`text-[10px] mt-1 flex justify-end gap-1 ${isMe ? 'text-emerald-200' : 'text-gray-400'}`}>
                         {formatTime(msg.created_at)}
                         {isMe && (msg.is_read ? <CheckCheck size={12}/> : <Check size={12}/>)}
@@ -314,7 +352,7 @@ export const MessageCenter = () => {
             </div>
 
             {/* Input Area */}
-            <div className="p-4 bg-white border-t border-gray-200">
+            <div className="p-4 bg-white border-t border-gray-200 shrink-0">
               <form 
                 onSubmit={handleSendMessage}
                 className="flex items-end gap-2 bg-gray-50 border border-gray-200 rounded-2xl p-2 focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:border-emerald-500 transition-all"
@@ -334,7 +372,6 @@ export const MessageCenter = () => {
                   placeholder="Type a message..."
                   className="flex-1 bg-transparent border-none outline-none text-gray-800 placeholder-gray-400 resize-none max-h-32 py-2 min-h-[44px]"
                   rows={1}
-                  style={{ height: 'auto', minHeight: '44px' }}
                 />
                 <button type="button" className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-full transition-colors">
                   <Smile size={20} />
@@ -351,10 +388,11 @@ export const MessageCenter = () => {
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4 shadow-inner">
               <Send size={40} className="text-gray-300 ml-1" />
             </div>
             <p className="text-lg font-medium">Select a conversation to start messaging</p>
+            <p className="text-xs mt-2 uppercase tracking-widest font-black opacity-30">Supabase Secure Live Data</p>
           </div>
         )}
       </div>

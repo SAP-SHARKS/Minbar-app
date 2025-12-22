@@ -4,10 +4,10 @@ import {
   MapPin, Star, Heart, MessageCircle, Send, Loader2, AlertCircle,
   Minus, Plus, Type, ChevronRight, TrendingUp, Grid, User,
   BookOpen, Moon, Sun, Users, Activity, Bookmark, LayoutList, Sparkles,
-  Calendar, Shield, CheckCircle
+  Calendar, Shield, CheckCircle, ArrowLeft, Filter, ArrowRight
 } from 'lucide-react';
 import { AUTHORS_DATA } from '../constants';
-import { Khutbah, KhutbahPreview, AuthorData, Imam } from '../types';
+import { Khutbah, KhutbahPreview, AuthorData, Imam, Topic } from '../types';
 import { supabase } from '../supabaseClient';
 import { useHomepageData, usePaginatedKhutbahs, useInfiniteScroll } from '../hooks';
 import { useAuth } from '../contexts/AuthContext';
@@ -59,27 +59,6 @@ const getTopicIcon = (name: string) => {
     return <FileText size={20} />;
 };
 
-const topicColors: Record<string, { bg: string; icon: string }> = {
-  'Salah': { bg: 'bg-blue-50', icon: 'text-blue-500' },
-  'Zakat': { bg: 'bg-pink-50', icon: 'text-pink-500' },
-  'Fasting': { bg: 'bg-purple-50', icon: 'text-purple-500' },
-  'Hajj': { bg: 'bg-orange-50', icon: 'text-orange-500' },
-  'Quran': { bg: 'bg-emerald-50', icon: 'text-emerald-500' },
-  'Hadith': { bg: 'bg-teal-50', icon: 'text-teal-500' },
-  'Family': { bg: 'bg-rose-50', icon: 'text-rose-500' },
-  'Character': { bg: 'bg-indigo-50', icon: 'text-indigo-500' },
-  'Death & Afterlife': { bg: 'bg-slate-50', icon: 'text-slate-500' },
-  'Community': { bg: 'bg-cyan-50', icon: 'text-cyan-500' },
-  'Current Events': { bg: 'bg-amber-50', icon: 'text-amber-500' },
-  'Ramadan': { bg: 'bg-violet-50', icon: 'text-violet-500' },
-  'Anger': { bg: 'bg-red-50', icon: 'text-red-500' },
-  'Patience': { bg: 'bg-green-50', icon: 'text-green-500' },
-  'Love': { bg: 'bg-pink-50', icon: 'text-pink-500' },
-  'Hope': { bg: 'bg-yellow-50', icon: 'text-yellow-500' },
-};
-
-const defaultColor = { bg: 'bg-gray-50', icon: 'text-gray-500' };
-
 const avatarColors = [
   'bg-blue-100 text-blue-600',
   'bg-green-100 text-green-600',
@@ -104,9 +83,10 @@ interface KhutbahCardProps {
   data: KhutbahPreview;
   onClick: () => void;
   onImamClick?: (slug: string) => void;
+  onTagClick?: (slug: string) => void;
 }
 
-const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onImamClick }) => (
+const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onImamClick, onTagClick }) => (
   <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 h-full flex flex-col relative overflow-hidden">
     
     <div className="absolute top-6 right-6">
@@ -117,12 +97,25 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onImamClick })
 
     <div className="flex flex-wrap gap-2 mb-4 pr-16">
       {data.labels && data.labels.slice(0, 3).map((label, idx) => (
-          <span key={idx} className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${getTagStyles(label)}`}>
+          <span 
+            key={idx} 
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onTagClick) onTagClick(label.toLowerCase().trim().replace(/\s+/g, '-'));
+            }}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:bg-teal-100 transition-colors ${getTagStyles(label)}`}
+          >
               {label}
           </span>
       ))}
       {(!data.labels || data.labels.length === 0) && data.topic && (
-          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${getTagStyles(data.topic)}`}>
+          <span 
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onTagClick) onTagClick(data.topic?.toLowerCase().trim().replace(/\s+/g, '-') || '');
+            }}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:bg-teal-100 transition-colors ${getTagStyles(data.topic)}`}
+          >
               {data.topic}
           </span>
       )}
@@ -164,37 +157,34 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onImamClick })
 interface TopicCardProps {
   name: string;
   count?: number;
-  onClick: () => void;
+  slug: string;
+  onClick: (slug: string) => void;
 }
 
-const TopicCard: React.FC<TopicCardProps> = ({ name, count, onClick }) => {
-    const colors = topicColors[name] || defaultColor;
-    return (
-        <div onClick={onClick} className={`bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:border-emerald-200 hover:shadow-md cursor-pointer transition-all text-center group flex flex-col items-center justify-center h-32`}>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform ${colors.bg} ${colors.icon}`}>
-                {getTopicIcon(name)}
-            </div>
-            <h4 className="font-bold text-gray-800 text-sm mb-1 line-clamp-1">{name}</h4>
-            {count !== undefined && <span className="text-[10px] text-gray-400 font-medium">{count} Khutbahs</span>}
+const TopicCard: React.FC<TopicCardProps> = ({ name, count, slug, onClick }) => (
+    <div onClick={() => onClick(slug)} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:border-emerald-200 hover:shadow-md cursor-pointer transition-all text-center group flex flex-col items-center justify-center h-32">
+        <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform group-hover:bg-emerald-100">
+            {getTopicIcon(name)}
         </div>
-    );
-};
+        <h4 className="font-bold text-gray-800 text-sm mb-1 line-clamp-1">{name}</h4>
+        {count !== undefined && <span className="text-[10px] text-gray-400 font-medium">{count} Khutbahs</span>}
+    </div>
+);
 
 interface ImamCardProps {
   name: string;
   count?: number;
   avatar_url?: string;
-  slug?: string;
-  onClick: (slug: string) => void;
+  onClick: () => void;
 }
 
-const ImamCard: React.FC<ImamCardProps> = ({ name, count, avatar_url, slug, onClick }) => (
-    <div onClick={() => slug && onClick(slug)} className="flex-shrink-0 w-40 bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all group mr-4">
-        <div className={`w-20 h-20 rounded-full mx-auto mb-3 overflow-hidden border-2 border-transparent group-hover:border-emerald-200 transition-colors ${!avatar_url ? getAvatarColor(name) : 'bg-gray-100'}`}>
+const ImamCard: React.FC<ImamCardProps> = ({ name, count, avatar_url, onClick }) => (
+    <div onClick={onClick} className="flex-shrink-0 w-40 bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all group mr-4">
+        <div className="w-20 h-20 bg-gray-100 rounded-full mx-auto mb-3 overflow-hidden border-2 border-transparent group-hover:border-emerald-200 transition-colors">
             {avatar_url ? (
                 <img src={avatar_url} alt={name} className="w-full h-full object-cover" />
             ) : (
-                <div className="w-full h-full flex items-center justify-center text-2xl font-bold">
+                <div className={`w-full h-full flex items-center justify-center text-2xl font-bold ${getAvatarColor(name)}`}>
                     {name.charAt(0)}
                 </div>
             )}
@@ -206,14 +196,527 @@ const ImamCard: React.FC<ImamCardProps> = ({ name, count, avatar_url, slug, onCl
     </div>
 );
 
+// --- Topic Page View Component ---
+
+const TopicPageView = ({ 
+  slug, 
+  onBack,
+  onSelectKhutbah,
+  onSelectImam,
+  onTagClick
+}: { 
+  slug: string; 
+  onBack: () => void;
+  onSelectKhutbah: (k: KhutbahPreview) => void;
+  onSelectImam: (slug: string) => void;
+  onTagClick: (slug: string) => void;
+}) => {
+  const [tagInfo, setTagInfo] = useState<any>(null);
+  const [allKhutbahs, setAllKhutbahs] = useState<KhutbahPreview[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    async function loadTopicData() {
+      setLoading(true);
+      setError(null);
+      try {
+        console.log(`[TopicPage] Starting 3-step fetch for slug: ${slug}`);
+
+        // STEP A: Fetch the tag object from the tags table using the slug from the URL.
+        // We avoid .single() to prevent coercion errors and use array indexing instead.
+        const { data: tagDataArray, error: tagError } = await supabase
+          .from('tags')
+          .select('id, name, slug')
+          .eq('slug', slug);
+        
+        if (tagError) throw new Error(`Tag fetch error: ${tagError.message}`);
+        
+        const tagData = tagDataArray?.[0];
+        if (!tagData) throw new Error(`Topic with slug "${slug}" was not found.`);
+        
+        setTagInfo(tagData);
+
+        // STEP B: Use the tag.id to get all khutbah_id entries from the khutbah_tags junction table.
+        const { data: junctionData, error: junctionError } = await supabase
+          .from('khutbah_tags')
+          .select('khutbah_id')
+          .eq('tag_id', tagData.id);
+        
+        if (junctionError) throw new Error(`Junction fetch error: ${junctionError.message}`);
+        
+        const khutbahIds = (junctionData || []).map(j => j.khutbah_id);
+        console.log(`[TopicPage] Found ${khutbahIds.length} khutbah IDs for tag: ${tagData.name}`);
+
+        if (khutbahIds.length === 0) {
+          setAllKhutbahs([]);
+          setLoading(false);
+          return;
+        }
+
+        // STEP C: Fetch full khutbah details from the khutbahs table for all IDs found in Step B.
+        // This process is stable even for high volume (900+ IDs).
+        const { data: khutbahData, error: khutbahError } = await supabase
+          .from('khutbahs')
+          .select(`
+            id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+            imams ( slug )
+          `)
+          .in('id', khutbahIds)
+          .order('created_at', { ascending: false });
+
+        if (khutbahError) throw new Error(`Khutbah fetch error: ${khutbahError.message}`);
+
+        const mapped: KhutbahPreview[] = (khutbahData || []).map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            author: item.author,
+            topic: item.topic,
+            labels: item.tags,
+            likes: item.likes_count,
+            comments_count: item.comments_count,
+            published_at: item.created_at,
+            rating: item.rating || 4.8,
+            imam_slug: item.imams?.slug
+        }));
+
+        setAllKhutbahs(mapped);
+      } catch (err: any) {
+        console.error("[TopicPage] Fetch error:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadTopicData();
+  }, [slug]);
+
+  const filteredKhutbahs = useMemo(() => {
+    if (!searchQuery.trim()) return allKhutbahs;
+    const lowerQuery = searchQuery.toLowerCase();
+    return allKhutbahs.filter(k => 
+      k.title.toLowerCase().includes(lowerQuery) || 
+      k.author.toLowerCase().includes(lowerQuery)
+    );
+  }, [allKhutbahs, searchQuery]);
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-32">
+      <Loader2 size={48} className="animate-spin text-emerald-600 mb-4" />
+      <p className="text-emerald-800 font-bold uppercase tracking-widest">Gathering Wisdom...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="p-8 text-center bg-red-50 rounded-2xl border border-red-100 max-w-2xl mx-auto mt-10">
+      <AlertCircle size={40} className="mx-auto mb-4 text-red-500" />
+      <h3 className="text-xl font-bold text-red-900 mb-2">Notice</h3>
+      <p className="text-red-700 mb-6">{error}</p>
+      <button onClick={onBack} className="bg-red-600 text-white px-6 py-2 rounded-xl font-bold">Back to Home</button>
+    </div>
+  );
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full pb-32">
+      <button onClick={onBack} className="mb-8 flex items-center text-gray-500 hover:text-emerald-600 gap-2 font-medium">
+        <ArrowLeft size={18} /> Back
+      </button>
+
+      <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-12">
+        <div>
+          <h1 className="text-5xl md:text-6xl font-serif font-bold text-gray-900 mb-4">
+            <span className="text-emerald-600">Topic:</span> {tagInfo?.name || 'Loading...'}
+          </h1>
+          <p className="text-gray-500 text-xl">Showing {filteredKhutbahs.length} sermons tagged with "{tagInfo?.name}"</p>
+        </div>
+        
+        {/* Search through results locally */}
+        <div className="relative w-full md:w-96">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input 
+                type="text" 
+                placeholder={`Search ${tagInfo?.name} results...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-6 py-4 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-emerald-500 outline-none text-lg transition-all"
+            />
+        </div>
+      </div>
+
+      {filteredKhutbahs.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredKhutbahs.map(k => (
+            <KhutbahCard 
+              key={k.id} 
+              data={k} 
+              onClick={() => onSelectKhutbah(k)} 
+              onImamClick={onSelectImam}
+              onTagClick={onTagClick}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-[2.5rem] border-2 border-dashed border-gray-100 p-20 text-center">
+           <FileText size={64} className="mx-auto mb-4 text-gray-200" />
+           <p className="text-gray-400 font-bold text-xl">No sermons found matching your filter.</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Detailed View Component ---
+
+const ImamDetailedView = ({ 
+  imam, 
+  onBack 
+}: { 
+  imam: Imam; 
+  onBack: () => void;
+}) => {
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState('recent');
+
+  useEffect(() => {
+    async function fetchReviews() {
+      setLoading(true);
+      try {
+        let query = supabase
+          .from('imam_reviews')
+          .select('*')
+          .eq('imam_id', imam.id);
+
+        if (sortBy === 'recent') {
+          query = query.order('created_at', { ascending: false });
+        } else if (sortBy === 'rating') {
+          query = query.order('rating', { ascending: false });
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        setReviews(data || []);
+      } catch (err) {
+        console.error("Error fetching reviews:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchReviews();
+  }, [imam.id, sortBy]);
+
+  return (
+    <div className="animate-in fade-in slide-in-from-right-8 duration-300 pb-32 w-full">
+      <button onClick={onBack} className="mb-6 flex items-center text-gray-500 hover:text-teal-600 gap-2 font-medium">
+        <ArrowLeft size={18} /> Back to Profile
+      </button>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+              <User size={24} className="text-teal-500" /> About Dr. {imam.name}
+            </h2>
+            <div className="prose prose-teal max-w-none text-gray-600 leading-relaxed space-y-4">
+              <p>{imam.bio}</p>
+              <p>
+                Dr. {imam.name} has dedicated over two decades to serving the community through education, spiritual guidance, and social activism. 
+                His approach combines traditional Islamic knowledge with modern insights to address contemporary challenges facing the Ummah.
+              </p>
+              <h3 className="text-gray-900 font-bold mt-6">Academic Background</h3>
+              <ul className="list-disc pl-5 space-y-2">
+                <li>Ph.D. in Islamic Studies - University of Al-Azhar</li>
+                <li>M.A. in Religious Education - University of London</li>
+                <li>Ijazah in Classical Fiqh & Hadith Sciences</li>
+              </ul>
+            </div>
+          </section>
+
+          <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <MessageCircle size={24} className="text-teal-500" /> Community Testimonials
+              </h2>
+              <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200">
+                <button 
+                  onClick={() => setSortBy('recent')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${sortBy === 'recent' ? 'bg-white text-teal-600 shadow-sm' : 'text-gray-400'}`}
+                >
+                  Most Recent
+                </button>
+                <button 
+                  onClick={() => setSortBy('rating')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${sortBy === 'rating' ? 'bg-white text-teal-600 shadow-sm' : 'text-gray-400'}`}
+                >
+                  Highest Rated
+                </button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="py-12 flex justify-center"><Loader2 size={32} className="animate-spin text-teal-500" /></div>
+            ) : reviews.length > 0 ? (
+              <div className="space-y-6">
+                {reviews.map(review => (
+                  <div key={review.id} className="p-6 bg-gray-50/50 rounded-2xl border border-gray-100 hover:border-teal-100 transition-colors">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="font-bold text-gray-900 text-lg">{review.reviewer_name || 'Verified Community Member'}</div>
+                        <div className="text-xs text-gray-400 font-medium">{new Date(review.created_at).toLocaleDateString()}</div>
+                      </div>
+                      <div className="flex gap-0.5 text-amber-400">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} size={14} fill={i < review.rating ? "currentColor" : "none"} className={i < review.rating ? "" : "text-gray-200"} />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-gray-600 italic leading-relaxed">"{review.comment}"</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-gray-400 italic">No reviews yet for this profile.</div>
+            )}
+          </section>
+        </div>
+
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm sticky top-6">
+             <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2"><Calendar size={20} className="text-teal-500" /> Booking Details</h3>
+             <div className="space-y-4 mb-8">
+                <div className="flex justify-between items-center pb-4 border-b border-gray-50">
+                  <span className="text-gray-500 text-sm font-medium">Travel Radius</span>
+                  <span className="font-bold text-gray-900">50 Miles</span>
+                </div>
+                <div className="flex justify-between items-center pb-4 border-b border-gray-50">
+                  <span className="text-gray-500 text-sm font-medium">Min. Notice</span>
+                  <span className="font-bold text-gray-900">2 Weeks</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500 text-sm font-medium">Honorarium</span>
+                  <span className="font-bold text-teal-600">£150 - £300</span>
+                </div>
+             </div>
+
+             <div className="bg-teal-50 p-4 rounded-2xl mb-8 border border-teal-100">
+                <h4 className="font-bold text-teal-800 text-xs uppercase tracking-widest mb-2 flex items-center gap-1.5"><Shield size={14}/> Verification</h4>
+                <ul className="space-y-2">
+                   <li className="flex items-center gap-2 text-xs text-teal-700 font-medium"><CheckCircle size={14}/> Background Check Clear</li>
+                   <li className="flex items-center gap-2 text-xs text-teal-700 font-medium"><CheckCircle size={14}/> Verified Academic Credentials</li>
+                   <li className="flex items-center gap-2 text-xs text-teal-700 font-medium"><CheckCircle size={14}/> Masjid Board References</li>
+                </ul>
+             </div>
+
+             <button className="w-full bg-teal-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-teal-100 hover:bg-teal-700 transition-all flex items-center justify-center gap-2 group">
+                Send Booking Request <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Imam Profile View Component ---
+
+const ImamProfileView = ({ 
+  slug, 
+  onBack,
+  onSelectKhutbah,
+  onNavigateDetails,
+  onTagClick
+}: { 
+  slug: string; 
+  onBack: () => void; 
+  onSelectKhutbah: (k: KhutbahPreview) => void;
+  onNavigateDetails: (imam: Imam) => void;
+  onTagClick: (slug: string) => void;
+}) => {
+  const [imam, setImam] = useState<Imam | null>(null);
+  const [sermons, setSermons] = useState<any[]>([]);
+  const [realtimeCount, setRealtimeCount] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [sermonSearch, setSermonSearch] = useState('');
+
+  useEffect(() => {
+    async function loadImamData() {
+      setLoading(true);
+      try {
+        const { data: imamDataArray, error: imamError } = await supabase
+          .from('imams')
+          .select('*')
+          .eq('slug', slug);
+        
+        if (imamError) throw imamError;
+        const imamData = imamDataArray?.[0];
+        if (!imamData) throw new Error("Imam profile not found");
+        
+        setImam(imamData);
+
+        const { data: sermonData, error: sermonError } = await supabase
+          .from('khutbahs')
+          .select(`
+             id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+             imams ( slug )
+          `)
+          .eq('imam_id', imamData.id)
+          .order('created_at', { ascending: false });
+        
+        if (sermonError) throw sermonError;
+        setSermons(sermonData || []);
+
+        const { count, error: countError } = await supabase
+          .from('khutbahs')
+          .select('*', { count: 'exact', head: true })
+          .eq('imam_id', imamData.id);
+        
+        if (!countError) {
+          setRealtimeCount(count || 0);
+        }
+
+      } catch (err) {
+        console.error("Error loading imam profile:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadImamData();
+  }, [slug]);
+
+  const filteredSermons = useMemo(() => {
+    if (!sermonSearch) return sermons;
+    return sermons.filter(s => 
+      s.title.toLowerCase().includes(sermonSearch.toLowerCase()) ||
+      (s.topic && s.topic.toLowerCase().includes(sermonSearch.toLowerCase()))
+    );
+  }, [sermons, sermonSearch]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96">
+        <Loader2 size={48} className="animate-spin text-teal-600 mb-4" />
+        <p className="text-teal-800 font-bold tracking-widest">LOADING PROFILE</p>
+      </div>
+    );
+  }
+
+  if (!imam) return <div className="p-8 text-center text-gray-500 font-bold">Imam profile not found.</div>;
+
+  return (
+    <div className="animate-in fade-in slide-in-from-right-8 duration-300 pb-20 w-full">
+      <button onClick={onBack} className="mb-3 flex items-center text-gray-500 hover:text-teal-600 gap-2 font-medium">
+        <ChevronLeft size={16} /> Back
+      </button>
+      
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm mb-4 w-full relative overflow-hidden flex flex-col md:flex-row items-center gap-4">
+        <div className="flex items-center gap-4 flex-1 min-w-0 w-full">
+          <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 shadow-sm ${getAvatarColor(imam.name)}`}>
+            {imam.avatar_url ? <img src={imam.avatar_url} alt={imam.name} className="w-full h-full object-cover rounded-2xl" /> : imam.name.charAt(0)}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+              <h1 className="text-xl md:text-2xl font-serif font-bold text-gray-900 truncate">{imam.name}</h1>
+              <span className="font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded text-[10px] uppercase whitespace-nowrap border border-teal-100">Verified Scholar</span>
+              {imam.city && (
+                <span className="flex items-center gap-1 text-gray-400 text-xs font-medium"><MapPin size={10}/> {imam.city}</span>
+              )}
+            </div>
+            
+            <p className="text-gray-500 text-xs md:text-sm truncate max-w-2xl mb-1.5">
+              {imam.bio || `Dr. ${imam.name} is a renowned scholar specializing in Islamic thought and community development.`}
+            </p>
+
+            <div className="flex items-center gap-5 text-gray-600">
+              <div className="flex items-center gap-1.5">
+                <BookOpen size={14} className="text-teal-500" />
+                <span className="text-sm font-bold text-gray-900">{realtimeCount || imam.khutbah_count || 0}</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Sermons</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Star size={14} className="text-amber-400 fill-current" />
+                <span className="text-sm font-bold text-gray-900">{imam.rating_avg || '4.9'}</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Rating</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <MessageCircle size={14} className="text-blue-400" />
+                <span className="text-sm font-bold text-gray-900">{imam.review_count || 0}</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Reviews</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+           <button className="bg-teal-600 text-white px-5 py-1.5 rounded-full text-xs font-bold shadow-md hover:bg-teal-700 transition-all">Follow</button>
+           <button className="bg-white border border-gray-200 text-gray-700 px-5 py-1.5 rounded-full text-xs font-bold hover:bg-gray-50 transition-all">Share</button>
+           <button 
+              onClick={() => onNavigateDetails(imam)}
+              className="flex items-center gap-1 text-teal-600 font-bold text-xs hover:underline ml-2"
+            >
+              View Full Details <ChevronRight size={14} />
+            </button>
+        </div>
+      </div>
+
+      <div className="w-full">
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+          <h2 className="text-xl font-bold text-gray-900">Recorded Sermons</h2>
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input 
+              type="text" 
+              placeholder="Filter sermons..." 
+              value={sermonSearch}
+              onChange={(e) => setSermonSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-1.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-teal-500 transition-all text-xs shadow-sm"
+            />
+          </div>
+        </div>
+
+        {filteredSermons.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredSermons.map(s => (
+              <KhutbahCard 
+                key={s.id} 
+                data={{
+                  id: s.id,
+                  title: s.title,
+                  author: imam.name,
+                  likes: s.likes_count || 0,
+                  topic: s.topic,
+                  labels: s.tags,
+                  published_at: s.created_at,
+                  rating: s.rating,
+                  imam_slug: s.imams?.slug
+                }} 
+                onClick={() => onSelectKhutbah({ id: s.id } as any)} 
+                onTagClick={onTagClick}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-3xl border-2 border-dashed border-gray-100 p-12 text-center text-gray-400">
+             <FileText size={40} className="mx-auto mb-2 opacity-20" />
+             <p className="font-bold">No sermons found matching your criteria.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const HomeView = ({ 
     onNavigate, 
     onSelectKhutbah,
-    onSelectImam
+    onSelectImam,
+    onTagClick
 }: { 
     onNavigate: (view: any, filter?: any) => void; 
     onSelectKhutbah: (k: KhutbahPreview) => void;
     onSelectImam: (slug: string) => void;
+    onTagClick: (slug: string) => void;
 }) => {
     const { data, isLoading } = useHomepageData();
 
@@ -227,7 +730,6 @@ const HomeView = ({
 
     return (
         <div className="space-y-16 pb-20 animate-in fade-in duration-500">
-            {/* Latest Section */}
             <section>
                 <div className="flex justify-between items-end mb-6 px-1">
                     <div>
@@ -237,11 +739,10 @@ const HomeView = ({
                     <button onClick={() => onNavigate('list', { sort: 'latest' })} className="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">See All <ChevronRight size={14}/></button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {data.latest.map(k => <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} />)}
+                    {data.latest.map(k => <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} onTagClick={onTagClick} />)}
                 </div>
             </section>
 
-            {/* Trending Section */}
             <section>
                 <div className="flex justify-between items-end mb-6 px-1">
                     <div>
@@ -251,13 +752,12 @@ const HomeView = ({
                     <button onClick={() => onNavigate('list', { sort: 'trending' })} className="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">See All <ChevronRight size={14}/></button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {data.trending.map(k => <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} />)}
+                    {data.trending.map(k => <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} onTagClick={onTagClick} />)}
                 </div>
             </section>
 
-            {/* Topics Grid */}
-            <section className="bg-gray-100 -mx-6 px-6 py-14">
-                <div className="w-full">
+            <section className="bg-gray-100 -mx-8 px-8 py-14">
+                <div className="max-w-[2000px] mx-auto">
                     <div className="flex justify-between items-end mb-8">
                         <div>
                             <h2 className="text-2xl font-bold text-gray-900">Browse by Topic</h2>
@@ -267,17 +767,16 @@ const HomeView = ({
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                         {data.topics.length > 0 ? data.topics.map(t => (
-                            <TopicCard key={t.id} name={t.name} count={t.khutbah_count} onClick={() => onNavigate('list', { topic: t.name })} />
+                            <TopicCard key={t.id} name={t.name} count={t.khutbah_count} slug={t.slug} onClick={onTagClick} />
                         )) : (
                             ['Salah', 'Zakat', 'Fasting', 'Hajj', 'Family', 'Character', 'Quran', 'Sunnah', 'History', 'Ethics'].map(t => (
-                                <TopicCard key={t} name={t} onClick={() => onNavigate('list', { topic: t })} />
+                                <TopicCard key={t} name={t} slug={t.toLowerCase()} onClick={onTagClick} />
                             ))
                         )}
                     </div>
                 </div>
             </section>
 
-            {/* Imams Scroll */}
             <section>
                 <div className="flex justify-between items-end mb-6 px-1">
                     <div>
@@ -288,7 +787,7 @@ const HomeView = ({
                 </div>
                 <div className="flex overflow-x-auto pb-6 -mx-2 px-2 custom-scrollbar">
                     {data.imams.length > 0 ? data.imams.map(i => (
-                        <ImamCard key={i.id} name={i.name} count={i.khutbah_count} avatar_url={i.avatar_url} slug={i.slug} onClick={onSelectImam} />
+                        <ImamCard key={i.id} name={i.name} count={i.khutbah_count} avatar_url={i.avatar_url} onClick={() => onSelectImam(i.slug)} />
                     )) : (
                         ['Mufti Menk', 'Omar Suleiman', 'Nouman Ali Khan', 'Yasir Qadhi', 'Hamza Yusuf', 'Suhaib Webb'].map(i => (
                             <ImamCard key={i} name={i} onClick={() => {}} />
@@ -297,7 +796,6 @@ const HomeView = ({
                 </div>
             </section>
 
-            {/* Most Used / Classics Section */}
             <section>
                 <div className="flex justify-between items-end mb-6 px-1">
                     <div>
@@ -306,10 +804,10 @@ const HomeView = ({
                     </div>
                     <button onClick={() => onNavigate('list', { sort: 'trending' })} className="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">See All <ChevronRight size={14}/></button>
                 </div>
-                <div className="flex overflow-x-auto pb-6 -mx-2 px-2 custom-scrollbar gap-6">
+                <div className="flex overflow-x-auto pb-6 -mx-4 px-4 custom-scrollbar gap-6">
                     {data.classics.map(k => (
                         <div key={k.id} className="min-w-[300px] w-[300px]">
-                            <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} />
+                            <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} onTagClick={onTagClick} />
                         </div>
                     ))}
                 </div>
@@ -323,13 +821,15 @@ const ListView = ({
     setFilters, 
     onSelectKhutbah,
     onBack,
-    onSelectImam
+    onSelectImam,
+    onTagClick
 }: { 
     filters: any, 
     setFilters: (f: any) => void, 
     onSelectKhutbah: (k: KhutbahPreview) => void,
     onBack: () => void,
-    onSelectImam: (slug: string) => void
+    onSelectImam: (slug: string) => void,
+    onTagClick: (slug: string) => void
 }) => {
     const { data, count, hasMore, isLoading, loadMore, refresh } = usePaginatedKhutbahs(filters);
     const lastElementRef = useInfiniteScroll(loadMore, hasMore, isLoading);
@@ -364,7 +864,7 @@ const ListView = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
                 {data.map((k, index) => (
                     <div key={k.id} ref={index === data.length - 1 ? lastElementRef : null}>
-                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} />
+                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} onTagClick={onTagClick} />
                     </div>
                 ))}
             </div>
@@ -386,230 +886,20 @@ const ListView = ({
     );
 };
 
-// --- New Imam Profile View Component ---
-
-const ImamProfileView = ({ 
-  slug, 
-  onBack,
-  onSelectKhutbah 
-}: { 
-  slug: string; 
-  onBack: () => void;
-  onSelectKhutbah: (k: KhutbahPreview) => void;
-}) => {
-  const [imam, setImam] = useState<Imam | null>(null);
-  const [sermons, setSermons] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sermonSearch, setSermonSearch] = useState('');
-  const [showFullDetails, setShowFullDetails] = useState(false);
-
-  useEffect(() => {
-    async function loadImamData() {
-      setLoading(true);
-      try {
-        // Fetch Imam profile
-        const { data: imamData, error: imamError } = await supabase
-          .from('imams')
-          .select('*')
-          .eq('slug', slug)
-          .single();
-        
-        if (imamError) throw imamError;
-        console.log("Loading Imam Data:", imamData);
-        setImam(imamData);
-
-        // Fetch sermons for this imam
-        const { data: sermonData, error: sermonError } = await supabase
-          .from('khutbahs')
-          .select('*')
-          .eq('imam_id', imamData.id)
-          .order('created_at', { ascending: false });
-        
-        if (sermonError) throw sermonError;
-        setSermons(sermonData || []);
-      } catch (err) {
-        console.error("Error loading imam profile:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadImamData();
-  }, [slug]);
-
-  const filteredSermons = useMemo(() => {
-    if (!sermonSearch) return sermons;
-    return sermons.filter(s => 
-      s.title.toLowerCase().includes(sermonSearch.toLowerCase()) ||
-      (s.topic && s.topic.toLowerCase().includes(sermonSearch.toLowerCase()))
-    );
-  }, [sermons, sermonSearch]);
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96">
-        <Loader2 size={48} className="animate-spin text-teal-600 mb-4" />
-        <p className="text-teal-800 font-bold">LOADING IMAM PROFILE</p>
-      </div>
-    );
-  }
-
-  if (!imam) return <div className="p-8 text-center">Imam profile not found.</div>;
-
-  return (
-    <div className="animate-in fade-in slide-in-from-right-8 duration-300 pb-20 w-full">
-      <button onClick={onBack} className="mb-3 flex items-center text-gray-500 hover:text-teal-600 gap-2 font-medium">
-        <ChevronLeft size={16} /> Back
-      </button>
-      
-      {/* Header Section - ULTRA COMPACT BANNER */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm mb-4 w-full relative overflow-hidden flex flex-col md:flex-row items-center gap-4">
-        <div className="flex items-center gap-4 flex-1 min-w-0 w-full">
-          {/* Profile Image - Smaller */}
-          <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 shadow-sm ${getAvatarColor(imam.name)}`}>
-            {imam.avatar_url ? <img src={imam.avatar_url} alt={imam.name} className="w-full h-full object-cover rounded-2xl" /> : imam.name.charAt(0)}
-          </div>
-          
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-0.5">
-              <h1 className="text-xl md:text-2xl font-serif font-bold text-gray-900 truncate">{imam.name}</h1>
-              <span className="font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded text-[10px] uppercase whitespace-nowrap border border-teal-100">Verified Scholar</span>
-              {imam.city && (
-                <span className="flex items-center gap-1 text-gray-400 text-xs font-medium"><MapPin size={10}/> {imam.city}</span>
-              )}
-            </div>
-            
-            {/* Bio Snippet - Integrated */}
-            <p className="text-gray-500 text-xs md:text-sm truncate max-w-2xl mb-1.5">
-              {imam.bio || `Dr. ${imam.name} is a renowned scholar specializing in Islamic thought and community development.`}
-            </p>
-
-            {/* Inline Stats Row */}
-            <div className="flex items-center gap-5 text-gray-600">
-              <div className="flex items-center gap-1.5">
-                <BookOpen size={14} className="text-teal-500" />
-                <span className="text-sm font-bold text-gray-900">{imam.khutbah_count || 0}</span>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Sermons</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Star size={14} className="text-amber-400 fill-current" />
-                <span className="text-sm font-bold text-gray-900">{imam.rating_avg || '4.9'}</span>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Rating</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <MessageCircle size={14} className="text-blue-400" />
-                <span className="text-sm font-bold text-gray-900">{imam.review_count || 0}</span>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Reviews</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Area - Far Right */}
-        <div className="flex items-center gap-2 shrink-0">
-           <button className="bg-teal-600 text-white px-5 py-1.5 rounded-full text-xs font-bold shadow-md hover:bg-teal-700 transition-all">Follow</button>
-           <button className="bg-white border border-gray-200 text-gray-700 px-5 py-1.5 rounded-full text-xs font-bold hover:bg-gray-50 transition-all">Share</button>
-           <button 
-              onClick={() => setShowFullDetails(!showFullDetails)}
-              className="flex items-center gap-1 text-teal-600 font-bold text-xs hover:underline ml-2"
-            >
-              {showFullDetails ? 'Hide Details' : 'View Full Details'} <ChevronRight size={14} className={showFullDetails ? 'rotate-90 transition-transform' : 'transition-transform'} />
-            </button>
-        </div>
-      </div>
-
-      {/* Detailed View Collapsible Section */}
-      {showFullDetails && (
-        <div className="animate-in fade-in slide-in-from-top-4 duration-300 mb-6 grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-           <div className="space-y-4">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm"><Calendar size={16} className="text-teal-500" /> Booking Info</h3>
-              <div className="space-y-2 text-xs text-gray-600">
-                <div className="flex justify-between border-b border-gray-50 pb-2"><span>Travel Radius</span><span className="font-bold text-gray-900">50 Miles</span></div>
-                <div className="flex justify-between border-b border-gray-50 pb-2"><span>Min. Notice</span><span className="font-bold text-gray-900">2 Weeks</span></div>
-                <div className="flex justify-between border-b border-gray-50 pb-2"><span>Honorarium</span><span className="font-bold text-gray-900">£150-300</span></div>
-              </div>
-              <button className="w-full py-2 bg-teal-600 text-white rounded-lg font-bold text-xs shadow-md">Request Booking</button>
-           </div>
-           <div className="space-y-4">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm"><Shield size={16} className="text-teal-500" /> Verification</h3>
-              <ul className="space-y-2.5">
-                <li className="flex items-center gap-2 text-xs text-gray-600"><CheckCircle size={14} className="text-teal-500"/> Identity Verified</li>
-                <li className="flex items-center gap-2 text-xs text-gray-600"><CheckCircle size={14} className="text-teal-500"/> Background Check</li>
-                <li className="flex items-center gap-2 text-xs text-gray-600"><CheckCircle size={14} className="text-teal-500"/> References Checked</li>
-              </ul>
-           </div>
-           <div className="space-y-4">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm"><MessageCircle size={16} className="text-teal-500" /> Recent Reviews</h3>
-              <div className="space-y-3 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-                <div className="p-2.5 bg-gray-50 rounded-xl">
-                  <div className="flex justify-between mb-0.5"><span className="text-[10px] font-bold">Admin A.</span><div className="flex text-amber-400"><Star size={8} fill="currentColor"/><Star size={8} fill="currentColor"/><Star size={8} fill="currentColor"/></div></div>
-                  <p className="text-[10px] text-gray-500 italic">"Punctual and very engaging with the youth."</p>
-                </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* Sermon List Area - IMMEDIATELY VISIBLE AT TOP */}
-      <div className="w-full">
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
-          <h2 className="text-xl font-bold text-gray-900">Recorded Sermons</h2>
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input 
-              type="text" 
-              placeholder="Filter sermons..." 
-              value={sermonSearch}
-              onChange={(e) => setSermonSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-1.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-teal-500 transition-all text-xs shadow-sm"
-            />
-          </div>
-        </div>
-
-        {filteredSermons.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredSermons.map(s => (
-              <KhutbahCard 
-                key={s.id} 
-                data={{
-                  id: s.id,
-                  title: s.title,
-                  author: imam.name,
-                  likes: s.likes_count || 0,
-                  topic: s.topic,
-                  labels: s.tags,
-                  published_at: s.created_at,
-                  rating: s.rating
-                }} 
-                onClick={() => onSelectKhutbah({ id: s.id } as any)} 
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-3xl border-2 border-dashed border-gray-100 p-12 text-center text-gray-400">
-             <FileText size={40} className="mx-auto mb-2 opacity-20" />
-             <p className="font-bold">No sermons found matching your criteria.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, onStartLive, onAddToMyKhutbahs }) => {
-  const [view, setView] = useState<'home' | 'list' | 'detail' | 'imam-profile'>('home');
+  const [view, setView] = useState<'home' | 'list' | 'detail' | 'imam-profile' | 'imam-details' | 'topic-page'>('home');
   const [activeFilters, setActiveFilters] = useState<{ topic?: string, imam?: string, sort?: string, search?: string }>({});
   const [selectedKhutbahId, setSelectedKhutbahId] = useState<string | null>(null);
   const [selectedImamSlug, setSelectedImamSlug] = useState<string | null>(null);
+  const [selectedTopicSlug, setSelectedTopicSlug] = useState<string | null>(null);
+  const [activeImam, setActiveImam] = useState<Imam | null>(null);
   
-  // Detail View State
   const [detailData, setDetailData] = useState<Khutbah | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [contentFontSize, setContentFontSize] = useState(18);
-  const [isInMyKhutbahs, setIsInMyKhutbahs] = useState(false);
+  const [isInMyMyKhutbahs, setIsInMyKhutbahs] = useState(false);
   const [addingToMyKhutbahs, setAddingToMyKhutbahs] = useState(false);
   const [khutbahCards, setKhutbahCards] = useState<any[]>([]);
-  
-  // AI Processing State
   const [isProcessing, setIsProcessing] = useState(false);
   
   const { user: authUser, requireAuth } = useAuth(); 
@@ -622,6 +912,16 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const handleSelectImam = (slug: string) => {
     setSelectedImamSlug(slug);
     setView('imam-profile');
+  };
+
+  const handleSelectTopic = (slug: string) => {
+    setSelectedTopicSlug(slug);
+    setView('topic-page');
+  };
+
+  const handleNavigateImamDetails = (imam: Imam) => {
+    setActiveImam(imam);
+    setView('imam-details');
   };
 
   const handleSelectKhutbah = async (preview: KhutbahPreview) => {
@@ -680,144 +980,38 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       }
   };
 
-  const handleProcessAI = async () => {
-    if (!detailData || !detailData.id) return;
-    
-    setIsProcessing(true);
-    try {
-        const rawText = detailData.content || ''; 
-        if (!rawText) throw new Error("No content to process");
+  if (view === 'topic-page' && selectedTopicSlug) {
+      return (
+        <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
+            <div className="flex-1 overflow-y-auto">
+                <div className="page-container py-8 xl:py-12">
+                   <TopicPageView 
+                      slug={selectedTopicSlug} 
+                      onBack={() => setView('home')} 
+                      onSelectKhutbah={handleSelectKhutbah}
+                      onSelectImam={handleSelectImam}
+                      onTagClick={handleSelectTopic}
+                   />
+                </div>
+            </div>
+        </div>
+      );
+  }
 
-        const resFormat = await fetch('/api/process-khutbah', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ content: rawText, type: 'format' })
-        });
-        
-        if (!resFormat.ok) throw new Error('API Format Error');
-        const dataFormat = await resFormat.json();
-        const html = dataFormat.result;
-
-        const resCards = await fetch('/api/process-khutbah', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ content: html, type: 'cards' })
-        });
-        
-        if (!resCards.ok) throw new Error('API Cards Error');
-        const dataCards = await resCards.json();
-        
-        let cardsJson = [];
-        try {
-            const cleanJson = dataCards.result.replace(/```json/g, '').replace(/```/g, '').trim();
-            cardsJson = JSON.parse(cleanJson);
-        } catch (e) {
-            cardsJson = JSON.parse(dataCards.result);
-        }
-
-        const { error: updateError } = await supabase
-            .from('khutbahs')
-            .update({ content: html, extracted_text: html }) 
-            .eq('id', detailData.id);
-        
-        if (updateError) throw updateError;
-
-        await supabase.from('khutbah_cards').delete().eq('khutbah_id', detailData.id);
-        
-        const cardsPayload = cardsJson.map((c: any) => ({
-            khutbah_id: detailData.id,
-            card_number: c.card_number,
-            section_label: c.section_label || 'MAIN',
-            title: c.title || 'Section',
-            bullet_points: c.bullet_points || [],
-            arabic_text: c.arabic_text || '',
-            key_quote: c.key_quote || '',
-            quote_source: c.quote_source || '',
-            time_estimate_seconds: c.time_estimate_seconds || 60
-        }));
-        
-        const { error: insertError } = await supabase.from('khutbah_cards').insert(cardsPayload);
-        if (insertError) throw insertError;
-
-        handleSelectKhutbah({ id: detailData.id } as any);
-        alert('Khutbah processed successfully!');
-
-    } catch (err: any) {
-        alert("Processing failed: " + err.message);
-    } finally {
-        setIsProcessing(false);
-    }
-  };
-
-  const handleAddCopy = () => {
-      requireAuth('Sign in to save this khutbah to your personal library.', async () => {
-          if (!detailData) return;
-          
-          setAddingToMyKhutbahs(true);
-          const currentUser = authUser || user;
-
-          try {
-              const userId = currentUser?.id;
-              if (!userId) throw new Error("User not authenticated");
-              
-              const { data: userKhutbah, error: headerError } = await supabase
-                .from('user_khutbahs')
-                .insert({
-                    user_id: userId,
-                    source_khutbah_id: detailData.id,
-                    title: detailData.title,
-                    author: detailData.author,
-                    content: detailData.content || '',
-                })
-                .select()
-                .single();
-
-              if (headerError) throw headerError;
-
-              const { data: originalCards } = await supabase
-                .from('khutbah_cards')
-                .select('*')
-                .eq('khutbah_id', detailData.id)
-                .order('card_number');
-
-              if (originalCards && originalCards.length > 0) {
-                  const userCards = originalCards.map(c => ({
-                      user_khutbah_id: userKhutbah.id,
-                      card_number: c.card_number,
-                      section_label: c.section_label,
-                      title: c.title,
-                      bullet_points: c.bullet_points,
-                      arabic_text: c.arabic_text,
-                      key_quote: c.key_quote,
-                      quote_source: c.quote_source,
-                      transition_text: c.transition_text,
-                      time_estimate_seconds: c.time_estimate_seconds,
-                      notes: c.notes
-                  }));
-
-                  const { error: cardsError } = await supabase
-                    .from('user_khutbah_cards')
-                    .insert(userCards);
-                    
-                  if (cardsError) throw cardsError;
-              }
-
-              setIsInMyKhutbahs(true);
-              if (onAddToMyKhutbahs) onAddToMyKhutbahs(userKhutbah.id);
-
-          } catch (err: any) {
-              const msg = err.message || JSON.stringify(err);
-              if (msg.includes("duplicate key")) {
-                  alert("This khutbah is already in your collection.");
-                  setIsInMyKhutbahs(true);
-              } else {
-                  alert(`Failed to add to My Khutbahs: ${msg}`);
-              }
-          } finally {
-              setAddingToMyKhutbahs(false);
-          }
-      });
-  };
+  if (view === 'imam-details' && activeImam) {
+    return (
+      <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+              <div className="page-container py-8 xl:py-12">
+                 <ImamDetailedView 
+                    imam={activeImam} 
+                    onBack={() => setView('imam-profile')} 
+                 />
+              </div>
+          </div>
+      </div>
+    );
+  }
 
   if (view === 'imam-profile' && selectedImamSlug) {
       return (
@@ -828,6 +1022,8 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                       slug={selectedImamSlug} 
                       onBack={() => setView('home')} 
                       onSelectKhutbah={handleSelectKhutbah}
+                      onNavigateDetails={handleNavigateImamDetails}
+                      onTagClick={handleSelectTopic}
                    />
                 </div>
             </div>
@@ -847,50 +1043,21 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                 <div>
                     <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-gray-900 mb-4">{detailData.title}</h1>
                     <div className="flex flex-wrap items-center gap-4 text-lg text-gray-600">
-                    <span className="font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg">{detailData.author}</span>
+                    <span 
+                      onClick={() => handleSelectImam(detailData.author.toLowerCase().replace(/\s+/g, '-'))}
+                      className="font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg cursor-pointer hover:underline"
+                    >
+                      {detailData.author}
+                    </span>
                     <span>•</span>
-                    <span>{detailData.topic}</span>
+                    <span 
+                      onClick={() => handleSelectTopic(detailData.topic.toLowerCase().replace(/\s+/g, '-'))}
+                      className="cursor-pointer hover:underline"
+                    >
+                      {detailData.topic}
+                    </span>
                     {detailData.date && <><span>•</span><span>{detailData.date}</span></>}
                     </div>
-                </div>
-                <div className="flex flex-wrap gap-3 w-full xl:w-auto">
-                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-2 shadow-sm">
-                        <Type size={18} className="text-gray-400" />
-                        <button onClick={() => setContentFontSize(s => Math.max(14, s-2))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><Minus size={16} /></button>
-                        <span className="w-8 text-center font-bold text-gray-700 select-none">{contentFontSize}</span>
-                        <button onClick={() => setContentFontSize(s => Math.min(48, s+2))} className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><Plus size={16} /></button>
-                    </div>
-                    
-                    <button 
-                        onClick={handleProcessAI}
-                        disabled={isProcessing}
-                        className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 text-white px-6 py-3 rounded-full hover:opacity-90 transition-all shadow-lg shadow-violet-200 font-bold disabled:opacity-50"
-                    >
-                        {isProcessing ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
-                        {isProcessing ? 'Processing...' : 'Process with AI'}
-                    </button>
-
-                    {isInMyKhutbahs ? (
-                        <button 
-                            disabled 
-                            className="flex items-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-100 px-6 py-3 rounded-full cursor-default shadow-sm font-bold"
-                        >
-                            <Check size={20} /> In My Khutbahs
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={handleAddCopy}
-                            disabled={addingToMyKhutbahs}
-                            className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-full hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200 font-bold disabled:opacity-50"
-                        >
-                            {addingToMyKhutbahs ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
-                            Add to My Khutbahs
-                        </button>
-                    )}
-
-                    <button className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-6 py-3 rounded-full hover:bg-gray-50 transition-colors shadow-sm font-bold">
-                        <Heart size={20} /> Save
-                    </button>
                 </div>
                 </div>
                 
@@ -902,48 +1069,8 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                                 style={{ fontSize: `${contentFontSize}px` }}
                                 dangerouslySetInnerHTML={{ __html: detailData.content || '' }}
                             />
-                            
-                            {(!detailData.content || detailData.content.trim() === '') && (
-                                <div className="bg-gray-50 p-8 rounded-lg text-center text-gray-500">No text content available for this khutbah.</div>
-                            )}
                         </div>
                     </div>
-
-                    {khutbahCards.length > 0 && (
-                        <div className="w-full lg:w-96 shrink-0">
-                            <h3 className="font-bold text-gray-900 mb-4 text-lg flex items-center gap-2">
-                                <LayoutList size={20} className="text-emerald-600" /> Summary Cards
-                            </h3>
-                            <div className="space-y-4 sticky top-8">
-                                {khutbahCards.map(card => (
-                                    <div key={card.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-emerald-200 transition-colors shadow-sm">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider border ${getSectionColor(card.section_label)}`}>
-                                                {card.section_label}
-                                            </span>
-                                            <span className="text-xs font-bold text-gray-300">#{card.card_number}</span>
-                                        </div>
-                                        <h4 className="font-bold text-gray-900 mb-3 text-lg leading-tight">{card.title}</h4>
-                                        {card.bullet_points && card.bullet_points.length > 0 && (
-                                            <ul className="space-y-2">
-                                                {card.bullet_points.map((pt: string, i: number) => (
-                                                    <li key={i} className="flex gap-2 items-start text-sm text-gray-600 leading-snug">
-                                                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
-                                                        {pt}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                        {card.arabic_text && (
-                                            <div className="mt-4 pt-3 border-t border-gray-50 text-right">
-                                                <p className="font-serif text-lg text-gray-800 leading-relaxed" dir="rtl">{card.arabic_text}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
             </div>
@@ -965,43 +1092,14 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                         placeholder="Topic, imam, or keyword..." 
                         value={activeFilters.search || ''} 
                         onChange={(e) => setActiveFilters({...activeFilters, search: e.target.value})}
-                        onKeyDown={(e) => {
-                            if(e.key === 'Enter') handleNavigate('list', { ...activeFilters, search: (e.target as HTMLInputElement).value });
-                        }}
                         className="w-full pl-16 sm:pl-24 pr-24 sm:pr-40 py-6 sm:py-8 bg-white border border-gray-200 rounded-full shadow-2xl shadow-emerald-50/50 focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 outline-none text-xl sm:text-2xl transition-all placeholder-gray-300" 
                     />
-                    <div className="absolute right-3 sm:right-5 top-3 sm:top-5 bottom-3 sm:top-5">
-                        <button 
-                            onClick={() => handleNavigate('list', activeFilters)}
-                            className="h-full bg-gray-900 text-white px-6 sm:px-10 rounded-full font-bold text-base sm:text-lg hover:bg-gray-800 transition-colors"
-                        >
-                            Search
-                        </button>
-                    </div>
                 </div>
              </div>
           )}
-          
-          {(!showHero || view !== 'home') && (
-            <div className="flex justify-between items-end mb-10 w-full">
-                <div className="relative w-full max-w-xl">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                    <input 
-                        type="text" 
-                        placeholder="Search..." 
-                        value={activeFilters.search || ''} 
-                        onChange={(e) => setActiveFilters({...activeFilters, search: e.target.value})}
-                        onKeyDown={(e) => {
-                            if(e.key === 'Enter') handleNavigate('list', { ...activeFilters, search: (e.target as HTMLInputElement).value });
-                        }}
-                        className="pl-12 pr-6 py-4 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-emerald-500 outline-none w-full text-lg" 
-                    />
-                </div>
-            </div>
-          )}
         </div>
 
-        {view === 'home' && <HomeView onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} />}
+        {view === 'home' && <HomeView onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} />}
         {view === 'list' && (
             <ListView 
                 filters={activeFilters} 
@@ -1009,9 +1107,9 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                 onSelectKhutbah={handleSelectKhutbah}
                 onBack={() => setView('home')} 
                 onSelectImam={handleSelectImam}
+                onTagClick={handleSelectTopic}
             />
         )}
-        
       </div>
     </div>
   );
