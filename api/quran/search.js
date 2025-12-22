@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import { getQFAccessToken, getQFBaseUrl } from '../../lib/quranFoundationAuth.js';
 
 export default async function handler(req, res) {
@@ -7,27 +6,14 @@ export default async function handler(req, res) {
   const { q } = req.query;
   if (!q || q.length < 2) return res.status(400).json({ error: 'Query too short' });
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
-  const supabase = createClient(supabaseUrl, supabaseKey);
-  
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: 'LOGIN_REQUIRED', message: "Please sign in to search Quran verses." });
-  }
-
-  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-  if (authError || !user) {
-    return res.status(401).json({ error: 'LOGIN_REQUIRED', message: "Please sign in to search Quran verses." });
-  }
-
   try {
     const token = await getQFAccessToken();
     const baseUrl = getQFBaseUrl();
     const clientId = process.env.QURAN_CLIENT_ID_PROD;
 
-    // Use translation 131 (The Clear Quran) and limit size to 20 to allow for better local sorting
-    const searchUrl = `${baseUrl}/content/api/v4/search?q=${encodeURIComponent(q)}&size=20&page=1&language=en&translations=131`;
+    // Use translation 131 (The Clear Quran)
+    // Fetch a larger pool to allow for high-quality tiered sorting
+    const searchUrl = `${baseUrl}/content/api/v4/search?q=${encodeURIComponent(q)}&size=50&page=1&language=en&translations=131`;
     
     const response = await fetch(searchUrl, {
       headers: {
@@ -37,16 +23,13 @@ export default async function handler(req, res) {
       }
     });
 
-    if (response.status === 401 || response.status === 403) {
-      return res.status(401).json({ error: 'LOGIN_REQUIRED', message: "Access denied by Quran Foundation." });
-    }
-
     if (!response.ok) throw new Error(`QF API Error: ${response.status}`);
 
     const searchData = await response.json();
     const searchResults = searchData.search?.results || [];
 
-    const searchTerms = q.trim().toLowerCase().split(/\s+/);
+    const query = q.trim().toLowerCase();
+    const queryWords = query.split(/\s+/).filter(w => w.length > 0);
     const hasArabicQuery = /[\u0600-\u06FF]/.test(q);
 
     const scoredResults = searchResults.map(r => {
@@ -55,26 +38,27 @@ export default async function handler(req, res) {
       
       let score = 10;
 
-      // Tier 1: Exact Arabic Match
-      if (hasArabicQuery && arabic.includes(q.trim().toLowerCase())) {
+      // Tier 1: Exact Arabic text matches (if an Arabic query was used)
+      if (hasArabicQuery && arabic.includes(query)) {
         score = 1;
       }
-      // Tier 2: Exact English Phrase Match
-      else if (english.includes(q.trim().toLowerCase())) {
+      // Tier 2: Exact English phrase matches within the translation
+      else if (english.includes(query)) {
         score = 2;
       }
-      // Tier 3: All keywords present
+      // Tier 3: Keyword relevance (contains all words in the search query)
       else {
-        const allEnglishMatch = searchTerms.every(t => english.includes(t));
-        const allArabicMatch = searchTerms.every(t => arabic.includes(t));
-        if (allEnglishMatch || allArabicMatch) {
+        const matchesAllWords = queryWords.every(word => english.includes(word) || arabic.includes(word));
+        if (matchesAllWords) {
           score = 3;
+        } else {
+          score = 5; // Partial match
         }
       }
 
       return {
         verseKey: r.verse_key,
-        arabic: r.text || r.words?.map(w => w.text).join(' ') || '',
+        arabic: r.text || '',
         english: (r.translations?.[0]?.text || "Translation unavailable").replace(/<[^>]*>/g, ""),
         reference: `Quran ${r.verse_key}`,
         surah_id: r.verse_key.split(':')[0],
@@ -83,12 +67,18 @@ export default async function handler(req, res) {
       };
     });
 
-    // Sort by relevance score ascending
-    const sortedResults = scoredResults.sort((a, b) => a.relevance - b.relevance);
+    // Sort by relevance score ascending (1 is best), then by traditional verse order
+    const sortedResults = scoredResults.sort((a, b) => {
+      if (a.relevance !== b.relevance) return a.relevance - b.relevance;
+      const [aS, aV] = a.verseKey.split(':').map(Number);
+      const [bS, bV] = b.verseKey.split(':').map(Number);
+      return aS !== bS ? aS - bS : aV - bV;
+    });
 
-    return res.status(200).json({ results: sortedResults });
+    return res.status(200).json({ results: sortedResults.slice(0, 20) });
 
   } catch (error) {
+    console.error('[API/Quran-Search] Error:', error);
     return res.status(500).json({ error: error.message });
   }
 }

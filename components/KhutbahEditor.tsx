@@ -19,7 +19,6 @@ interface KhutbahEditorProps {
   onSaveNew?: (id: string) => void;
 }
 
-// --- Card Editing Modal Component ---
 function CardEditModal({ card, onSave, onClose, isSaving }: { card: any, onSave: (updated: any) => void, onClose: () => void, isSaving: boolean }) {
   const [editedCard, setEditedCard] = useState({ ...card });
 
@@ -139,16 +138,11 @@ export function KhutbahEditor({ user, khutbahId, onGoLive, onSaveNew }: KhutbahE
   const [activeFormats, setActiveFormats] = useState<string[]>([]);
   const savedRange = useRef<Range | null>(null);
   
-  // Block Library State
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  
-  // Summary Cards State
   const [cards, setCards] = useState<any[]>([]);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<any | null>(null);
   const [isCardModalSaving, setIsCardModalSaving] = useState(false);
-
-  // Block Context Toolbar State
   const [selectedBlockEl, setSelectedBlockEl] = useState<HTMLElement | null>(null);
   const [toolbarPos, setToolbarPos] = useState({ top: 0, left: 0 });
 
@@ -292,7 +286,6 @@ export function KhutbahEditor({ user, khutbahId, onGoLive, onSaveNew }: KhutbahE
     setSelectedBlockEl(null);
   };
 
-  // LEVEL 4 Interactions
   useEffect(() => {
     const handleEditorClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -301,7 +294,6 @@ export function KhutbahEditor({ user, khutbahId, onGoLive, onSaveNew }: KhutbahE
       if (blockContainer) {
         setSelectedBlockEl(blockContainer);
         const rect = blockContainer.getBoundingClientRect();
-        const editorRect = editorRef.current?.parentElement?.getBoundingClientRect() || { top: 0, left: 0 };
         setToolbarPos({ 
           top: rect.top - 50, 
           left: rect.left + (rect.width / 2) - 100 

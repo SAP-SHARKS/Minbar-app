@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   X, ArrowLeft, Search, Loader2, BookOpen, Scroll, HelpingHand, 
   CheckCircle2, Star, Info, Copy, Filter, ChevronLeft, ChevronRight,
-  AlertCircle
+  AlertCircle, Plus
 } from 'lucide-react';
 import { CategoryId, BlockItem } from './types';
 import { useAuth } from '../../contexts/AuthContext';
@@ -44,6 +43,10 @@ export function Level3Modal({ categoryId, onClose, onBack, onInsert, initialQuer
   const [currentPage, setCurrentPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   
+  // Quran Filters
+  const [surahs, setSurahs] = useState<any[]>([]);
+  const [selectedSurah, setSelectedSurah] = useState('');
+
   // Hadith Filters
   const [selectedBooks, setSelectedBooks] = useState<string[]>([]);
   const [authenticity, setAuthenticity] = useState('All');
@@ -51,13 +54,35 @@ export function Level3Modal({ categoryId, onClose, onBack, onInsert, initialQuer
   const [sortBy, setSortBy] = useState('Relevance');
   const [showFilters, setShowFilters] = useState(true);
 
+  // Fetch Surahs from Quran API (114 Surahs)
+  useEffect(() => {
+    async function fetchSurahs() {
+      try {
+        const response = await fetch('https://api.quran.com/api/v4/chapters');
+        const data = await response.json();
+        if (data.chapters) {
+          setSurahs(data.chapters.map((c: any) => ({
+            id: c.id.toString(),
+            name: c.name_simple,
+            arabic: c.name_arabic,
+            verses: c.verses_count
+          })));
+        }
+      } catch (err) {
+        console.error("Error fetching surahs:", err);
+      }
+    }
+    if (categoryId === 'quran') fetchSurahs();
+  }, [categoryId]);
+
   const fetchResults = async (page = 1) => {
     if (!categoryId || !session) return;
     setLoading(true);
     try {
       let endpoint = '';
       if (categoryId === 'quran') {
-        endpoint = `/api/quran/search?q=${encodeURIComponent(query || 'guidance')}`;
+        const surahParam = selectedSurah ? `&surah=${selectedSurah}` : '';
+        endpoint = `/api/quran/search?q=${encodeURIComponent(query || 'guidance')}${surahParam}`;
       } else if (categoryId === 'hadith') {
         const bookParam = selectedBooks.length > 0 ? `&book=${selectedBooks.join(',')}` : '';
         const statusParam = authenticity === 'Sahih only' ? '&status=Sahih' : 
@@ -99,7 +124,7 @@ export function Level3Modal({ categoryId, onClose, onBack, onInsert, initialQuer
 
   useEffect(() => {
     fetchResults(1);
-  }, [categoryId, selectedBooks, authenticity, topic]);
+  }, [categoryId, selectedBooks, authenticity, topic, selectedSurah]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -111,6 +136,7 @@ export function Level3Modal({ categoryId, onClose, onBack, onInsert, initialQuer
   const clearFilters = () => {
     setQuery('');
     setSelectedBooks([]);
+    setSelectedSurah('');
     setAuthenticity('All');
     setTopic('');
     setSortBy('Relevance');
@@ -267,10 +293,15 @@ export function Level3Modal({ categoryId, onClose, onBack, onInsert, initialQuer
               {isQuran && (
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Filter by Surah</label>
-                  <select className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none">
-                    <option value="">All Surahs</option>
-                    <option value="1">1. Al-Fatiha</option>
-                    <option value="2">2. Al-Baqarah</option>
+                  <select 
+                    value={selectedSurah}
+                    onChange={(e) => setSelectedSurah(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none"
+                  >
+                    <option value="">All Surahs ({surahs.length})</option>
+                    {surahs.map(s => (
+                      <option key={s.id} value={s.id}>{s.id}. {s.name} ({s.arabic})</option>
+                    ))}
                   </select>
                 </div>
               )}
@@ -310,6 +341,11 @@ export function Level3Modal({ categoryId, onClose, onBack, onInsert, initialQuer
                       {topic} <X size={10} className="cursor-pointer" onClick={() => setTopic('')} />
                     </span>
                   )}
+                  {isQuran && selectedSurah && (
+                    <span className="flex items-center gap-1 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase whitespace-nowrap border border-emerald-100 animate-in fade-in zoom-in duration-200">
+                      Surah {selectedSurah} <X size={10} className="cursor-pointer" onClick={() => setSelectedSurah('')} />
+                    </span>
+                  )}
                </div>
                
                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
@@ -335,6 +371,7 @@ export function Level3Modal({ categoryId, onClose, onBack, onInsert, initialQuer
                   {results.map((item) => (
                     <div
                       key={item.id}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => onInsert(item)}
                       className="group bg-white rounded-xl border border-gray-100 hover:shadow-2xl transition-all cursor-pointer flex flex-col relative overflow-hidden h-full border-l-4"
                       style={{ borderLeftColor: themeColor }}
@@ -388,8 +425,9 @@ export function Level3Modal({ categoryId, onClose, onBack, onInsert, initialQuer
 
                         <div className="mt-auto flex justify-between items-end border-t border-gray-50 pt-4">
                           <div className="text-[10px] font-bold text-gray-300 uppercase truncate pr-4">{item.reference}</div>
+                          {/* Fixed: Added missing Plus icon usage that caused compilation error */}
                           <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity translate-y-2 group-hover:translate-y-0 duration-300 shrink-0 shadow-sm border border-emerald-100">
-                            <CheckCircle2 size={18} />
+                            <Plus size={18} />
                           </div>
                         </div>
                       </div>
