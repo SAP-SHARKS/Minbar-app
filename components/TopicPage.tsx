@@ -3,16 +3,15 @@ import { supabase } from '../supabaseClient';
 import { 
   X, MapPin, Star, FileText, Calendar, 
   ChevronRight, Loader2, Search, ArrowLeft,
-  Activity, Heart, Moon, Users, BookOpen
+  ChevronDown, Activity, Heart, Moon, Users, BookOpen
 } from 'lucide-react';
-import { TagButton } from './TagButton';
 
 interface TopicPageProps {
-  topicSlug: string;
+  topicName: string;
   onBack: () => void;
   onSelectKhutbah: (id: string) => void;
   onNavigateImam: (id: string) => void;
-  onNavigateTopic: (slug: string) => void;
+  onNavigateTopic: (name: string) => void;
 }
 
 const getTopicIcon = (name: string) => {
@@ -25,72 +24,47 @@ const getTopicIcon = (name: string) => {
     return <FileText size={32} />;
 };
 
-export function TopicPage({ topicSlug, onBack, onSelectKhutbah, onNavigateImam, onNavigateTopic }: TopicPageProps) {
-  const [topic, setTopic] = useState<any>(null);
+export function TopicPage({ topicName, onBack, onSelectKhutbah, onNavigateImam, onNavigateTopic }: TopicPageProps) {
   const [khutbahs, setKhutbahs] = useState<any[]>([]);
-  const [allTags, setAllTags] = useState<any[]>([]);
+  const [allTopics, setAllTopics] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
-    loadAllTags();
-  }, [topicSlug]);
+    loadAllTopics();
+  }, [topicName]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-
-      // 1. Fetch the tag/topic details
-      const { data: tagData, error: tagError } = await supabase
-        .from('tags')
-        .select('*')
-        .eq('slug', topicSlug)
-        .single();
-
-      if (tagError) throw tagError;
-      setTopic(tagData);
-
-      // 2. Fetch khutbahs with this tag using the junction table as per instructions
-      const { data: khutbahsData, error: khutbahsError } = await supabase
+      // Simplify query to avoid join errors if the relationship is not perfectly configured in the DB
+      // The join was unused in the current render logic as k.author and k.imam_id are part of 'khutbahs'
+      const { data, error } = await supabase
         .from('khutbahs')
-        .select(`
-          *,
-          imam:imams(id, name, slug, style, location),
-          khutbah_tags!inner(
-            tag:tags(id, name, slug)
-          )
-        `)
-        .eq('khutbah_tags.tag_id', tagData.id)
+        .select('id, title, author, imam_id, topic, tags, likes_count, comments_count, created_at, rating, description')
+        .eq('topic', topicName)
         .order('created_at', { ascending: false });
 
-      if (khutbahsError) throw khutbahsError;
-
-      // 3. Transform the data to have a clean tags array
-      const mapped = khutbahsData.map((k: any) => ({
-        ...k,
-        // Ensure author name is populated from joined imam or denormalized field
-        displayAuthor: k.imam?.name || k.author,
-        tags: k.khutbah_tags?.map((kt: any) => kt.tag).filter(Boolean) || []
-      }));
-
-      setKhutbahs(mapped);
+      if (error) throw error;
+      setKhutbahs(data || []);
     } catch (error: any) {
-      console.error('Error loading topic page:', error.message || error);
+      // Improved logging to reveal the actual error message
+      console.error('Error loading topic:', error.message || error);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadAllTags = async () => {
+  const loadAllTopics = async () => {
     try {
       const { data } = await supabase
-        .from('tags')
-        .select('id, name, slug, khutbah_count')
+        .from('topics')
+        .select('id, name')
         .order('khutbah_count', { ascending: false });
-      setAllTags(data || []);
+      setAllTopics(data || []);
     } catch (err) {
-      console.error("Error loading all tags:", err);
+      console.error("Error loading all topics:", err);
     }
   };
 
@@ -101,7 +75,7 @@ export function TopicPage({ topicSlug, onBack, onSelectKhutbah, onNavigateImam, 
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-gray-50 md:pl-20">
-        <Loader2 size={40} className="animate-spin text-teal-600" />
+        <Loader2 size={40} className="animate-spin text-emerald-600" />
       </div>
     );
   }
@@ -122,18 +96,12 @@ export function TopicPage({ topicSlug, onBack, onSelectKhutbah, onNavigateImam, 
             
             <div className="flex flex-col md:flex-row items-center md:items-start text-center md:text-left gap-10 relative z-10">
                 <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-emerald-600 flex items-center justify-center text-white shrink-0 shadow-lg">
-                    {getTopicIcon(topic?.name || 'General')}
+                    {getTopicIcon(topicName)}
                 </div>
                 <div className="flex-1">
-                    <h1 className="text-4xl md:text-6xl font-black text-gray-900 uppercase tracking-tighter mb-4 leading-none">{topic?.name}</h1>
-                    <p className="text-gray-500 font-bold uppercase tracking-widest text-sm mb-6">
-                      {khutbahs.length} curated sermon{khutbahs.length !== 1 ? 's' : ''} in this category
-                    </p>
+                    <h1 className="text-4xl md:text-6xl font-black text-gray-900 uppercase tracking-tighter mb-4 leading-none">{topicName}</h1>
+                    <p className="text-gray-500 font-bold uppercase tracking-widest text-sm mb-6">{khutbahs.length} curated sermons in this category</p>
                     
-                    {topic?.description && (
-                        <p className="text-gray-600 text-lg mb-6 leading-relaxed max-w-3xl italic">"{topic.description}"</p>
-                    )}
-
                     <div className="flex flex-wrap justify-center md:justify-start gap-4">
                         <div className="bg-emerald-50 px-4 py-2 rounded-xl flex items-center gap-2">
                              <Star size={16} className="text-emerald-600 fill-current" />
@@ -148,17 +116,17 @@ export function TopicPage({ topicSlug, onBack, onSelectKhutbah, onNavigateImam, 
         <div className="mb-10">
             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 ml-1">Switch Topic</h3>
             <div className="flex flex-wrap gap-2">
-                {allTags.map(t => (
+                {allTopics.map(t => (
                     <button
                         key={t.id}
-                        onClick={() => onNavigateTopic(t.slug)}
+                        onClick={() => onNavigateTopic(t.name)}
                         className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${
-                            t.slug === topicSlug 
+                            t.name === topicName 
                             ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-100 underline underline-offset-4 decoration-2' 
                             : 'bg-white text-gray-500 border-gray-100 hover:border-emerald-500 hover:text-emerald-600 hover:underline'
                         }`}
                     >
-                        {t.name} ({t.khutbah_count || 0})
+                        {t.name}
                     </button>
                 ))}
             </div>
@@ -170,7 +138,7 @@ export function TopicPage({ topicSlug, onBack, onSelectKhutbah, onNavigateImam, 
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input
                     type="text"
-                    placeholder={`Search within ${topic?.name}...`}
+                    placeholder={`Search within ${topicName}...`}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-12 pr-4 py-4 bg-white border border-gray-100 rounded-2xl shadow-sm focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-gray-800 placeholder-gray-300"
@@ -201,23 +169,14 @@ export function TopicPage({ topicSlug, onBack, onSelectKhutbah, onNavigateImam, 
                                 {k.title}
                             </h3>
 
-                            <div className="flex flex-wrap gap-2 mb-6">
-                              {k.tags?.map((tag: any) => (
-                                <TagButton key={tag.id} tag={tag} onNavigate={onNavigateTopic} size="xs" />
-                              ))}
-                            </div>
-
                             <div className="flex items-center text-sm text-gray-500 mb-6">
                                 <button 
-                                    onClick={(e) => { 
-                                      e.stopPropagation(); 
-                                      onNavigateImam(k.imam?.id || k.imam_id); 
-                                    }}
+                                    onClick={(e) => { e.stopPropagation(); onNavigateImam(k.imam_id); }}
                                     className="group/author flex items-center gap-2"
                                 >
                                     <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">By</span>
                                     <span className="font-black text-emerald-600 hover:text-emerald-700 hover:underline bg-emerald-50 px-3 py-1 rounded-lg uppercase tracking-tighter text-sm transition-all shadow-sm">
-                                        {k.displayAuthor}
+                                        {k.author}
                                     </span>
                                 </button>
                             </div>

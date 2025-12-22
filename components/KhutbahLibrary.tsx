@@ -5,12 +5,12 @@ import {
   Minus, Plus, Type, ChevronRight, TrendingUp, Grid, User,
   BookOpen, Moon, Sun, Users, Activity, Bookmark, LayoutList, Sparkles
 } from 'lucide-react';
-import { Khutbah, KhutbahPreview } from '../types';
+import { AUTHORS_DATA } from '../constants';
+import { Khutbah, KhutbahPreview, AuthorData } from '../types';
 import { supabase } from '../supabaseClient';
 import { useHomepageData, usePaginatedKhutbahs, useInfiniteScroll } from '../hooks';
 import { useAuth } from '../contexts/AuthContext';
 import ImamProfileModal from './ImamProfileModal';
-import { TagButton } from './TagButton';
 
 interface KhutbahLibraryProps {
   user: any;
@@ -18,10 +18,24 @@ interface KhutbahLibraryProps {
   onStartLive?: (id?: string) => void;
   onAddToMyKhutbahs?: (id: string) => void;
   onNavigateImam?: (id: string) => void;
-  onNavigateTopic?: (topicSlug: string) => void;
+  onNavigateTopic?: (topicName: string) => void;
 }
 
 // --- Utility Components ---
+
+const getTagStyles = (tag: string) => {
+  const styles = [
+    'bg-emerald-100 text-emerald-800 border-emerald-200',
+    'bg-blue-100 text-blue-800 border-blue-200',
+    'bg-purple-100 text-purple-800 border-purple-200',
+    'bg-amber-100 text-amber-800 border-amber-200',
+    'bg-rose-100 text-rose-800 border-rose-200',
+    'bg-teal-100 text-teal-800 border-teal-200',
+  ];
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+  return styles[Math.abs(hash) % styles.length];
+};
 
 const getSectionColor = (label: string) => {
     const colors: Record<string, string> = {
@@ -92,7 +106,7 @@ interface KhutbahCardProps {
   data: KhutbahPreview;
   onClick: () => void;
   onImamClick: (id: string) => void;
-  onTagClick: (slug: string) => void;
+  onTagClick: (tag: string) => void;
 }
 
 const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onImamClick, onTagClick }) => (
@@ -105,20 +119,28 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onImamClick, o
     </div>
 
     <div className="flex flex-wrap gap-2 mb-6 pr-20">
-      {data.tags && data.tags.slice(0, 3).map((tag) => (
-          <TagButton key={tag.id} tag={tag} onNavigate={onTagClick} size="sm" />
+      {data.labels && data.labels.slice(0, 3).map((label, idx) => (
+          <button 
+            key={idx} 
+            onClick={(e) => { e.stopPropagation(); onTagClick(label); }}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all hover:scale-105 hover:underline active:scale-95 ${getTagStyles(label)}`}
+          >
+              {label}
+          </button>
       ))}
+      {(!data.labels || data.labels.length === 0) && data.topic && (
+          <button 
+            onClick={(e) => { e.stopPropagation(); onTagClick(data.topic!); }}
+            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all hover:scale-105 hover:underline active:scale-95 ${getTagStyles(data.topic)}`}
+          >
+              {data.topic}
+          </button>
+      )}
     </div>
     
     <h3 className="text-2xl font-black text-gray-900 mb-4 group-hover:text-emerald-700 transition-colors line-clamp-2 leading-tight uppercase tracking-tighter">
         {data.title}
     </h3>
-
-    {data.summary && (
-      <p className="text-sm text-gray-500 line-clamp-2 mb-4 italic leading-relaxed">
-        "{data.summary}"
-      </p>
-    )}
     
     <div className="flex items-center text-sm text-gray-500 mb-auto">
         <button 
@@ -155,15 +177,14 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onImamClick, o
 
 interface TopicCardProps {
   name: string;
-  slug: string;
   count?: number;
-  onClick: (slug: string) => void;
+  onClick: () => void;
 }
 
-const TopicCard: React.FC<TopicCardProps> = ({ name, slug, count, onClick }) => {
+const TopicCard: React.FC<TopicCardProps> = ({ name, count, onClick }) => {
     const colors = topicColors[name] || defaultColor;
     return (
-        <div onClick={() => onClick(slug)} className={`bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:border-emerald-200 hover:shadow-2xl hover:-translate-y-1 cursor-pointer transition-all text-center group flex flex-col items-center justify-center h-40`}>
+        <div onClick={onClick} className={`bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:border-emerald-200 hover:shadow-2xl hover:-translate-y-1 cursor-pointer transition-all text-center group flex flex-col items-center justify-center h-40`}>
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 group-hover:rotate-6 transition-transform shadow-sm ${colors.bg} ${colors.icon}`}>
                 {getTopicIcon(name)}
             </div>
@@ -207,7 +228,7 @@ const HomeView = ({
     onNavigate: (view: 'home' | 'list', filter?: any) => void; 
     onSelectKhutbah: (k: KhutbahPreview) => void;
     onImamClick: (id: string) => void;
-    onNavigateTopic: (slug: string) => void;
+    onNavigateTopic: (t: string) => void;
 }) => {
     const { data, isLoading } = useHomepageData();
 
@@ -262,10 +283,10 @@ const HomeView = ({
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
                         {data.topics.length > 0 ? data.topics.map(t => (
-                            <TopicCard key={t.id} name={t.name} slug={t.slug} count={t.khutbah_count} onClick={onNavigateTopic} />
+                            <TopicCard key={t.id} name={t.name} count={t.khutbah_count} onClick={() => onNavigateTopic(t.name)} />
                         )) : (
                             ['Salah', 'Zakat', 'Fasting', 'Hajj', 'Family', 'Character', 'Quran', 'Sunnah', 'History', 'Ethics'].map(t => (
-                                <TopicCard key={t} name={t} slug={t.toLowerCase()} onClick={onNavigateTopic} />
+                                <TopicCard key={t} name={t} onClick={() => onNavigateTopic(t)} />
                             ))
                         )}
                     </div>
@@ -308,7 +329,7 @@ const ListView = ({
     onSelectKhutbah: (k: KhutbahPreview) => void,
     onImamClick: (id: string) => void,
     onBack: () => void,
-    onNavigateTopic: (slug: string) => void
+    onNavigateTopic: (t: string) => void
 }) => {
     const { data, count, hasMore, isLoading, loadMore, refresh } = usePaginatedKhutbahs(filters);
     const lastElementRef = useInfiniteScroll(loadMore, hasMore, isLoading);
@@ -399,7 +420,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       try {
           const { data, error } = await supabase
             .from('khutbahs')
-            .select('*, khutbah_tags(tag:tags(id, name, slug))')
+            .select('*')
             .eq('id', preview.id)
             .single();
             
@@ -410,7 +431,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   author: data.author,
                   imam_id: data.imam_id,
                   topic: data.topic,
-                  tags: data.khutbah_tags?.map((kt: any) => kt.tag).filter(Boolean) || [],
+                  labels: data.tags,
                   likes: data.likes_count,
                   content: data.extracted_text || data.content,
                   style: data.topic,
@@ -594,8 +615,8 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     if (onNavigateImam) onNavigateImam(id);
   };
 
-  const handleNavigateTopic = (slug: string) => {
-    if (onNavigateTopic) onNavigateTopic(slug);
+  const handleNavigateTopic = (name: string) => {
+    if (onNavigateTopic) onNavigateTopic(name);
   };
 
   if (view === 'detail') {
@@ -612,11 +633,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                     <div className="flex flex-wrap items-center gap-5 text-sm font-black uppercase tracking-widest">
                     <button onClick={() => detailData.imam_id && handleNavigateImam(detailData.imam_id)} className="text-emerald-600 bg-emerald-50 px-4 py-2 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm border border-emerald-100 font-black">{detailData.author}</button>
                     <span className="text-gray-200">•</span>
-                    <div className="flex gap-2">
-                      {detailData.tags?.map(tag => (
-                        <TagButton key={tag.id} tag={tag} onNavigate={handleNavigateTopic} />
-                      ))}
-                    </div>
+                    <button onClick={() => handleNavigateTopic(detailData.topic)} className="text-gray-400 hover:text-emerald-600 hover:underline">{detailData.topic}</button>
                     {detailData.date && <><span className="text-gray-200">•</span><span className="text-gray-400">{detailData.date}</span></>}
                     </div>
                 </div>

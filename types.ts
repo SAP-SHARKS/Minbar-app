@@ -4,35 +4,27 @@ export interface Comment {
   date: string;
 }
 
-export interface Tag {
-  id: string;
-  name: string;
-  slug: string;
-  khutbah_count?: number;
-}
-
 export interface KhutbahPreview {
   id: string;
   title: string;
   author: string;
-  imam_id?: string;
+  imam_id?: string; // Added for modal support
   topic?: string;
-  tags?: Tag[];
+  labels?: string[];
   view_count?: number;
   published_at?: string;
   likes: number;
   comments_count?: number;
   rating?: number;
-  summary?: string;
 }
 
 export interface Khutbah {
   id: string;
   title: string;
   author: string;
-  imam_id?: string;
+  imam_id?: string; // Added for modal support
   topic: string;
-  tags?: Tag[];
+  labels?: string[];
   likes: number;
   content: string;
   style: string;

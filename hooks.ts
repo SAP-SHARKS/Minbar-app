@@ -1,26 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
-import { KhutbahPreview, Topic, Imam, Tag } from './types';
-
-const mapKhutbah = (item: any): KhutbahPreview => {
-  // Transform the data to have a clean tags array from the junction table join
-  const tags: Tag[] = item.khutbah_tags?.map((kt: any) => kt.tag).filter(Boolean) || [];
-  
-  return {
-    id: item.id,
-    title: item.title,
-    // Use joined imam name if available, fallback to denormalized author
-    author: item.imam?.name || item.author,
-    imam_id: item.imam?.id || item.imam_id,
-    topic: item.topic,
-    tags: tags,
-    likes: item.likes_count,
-    comments_count: item.comments_count,
-    published_at: item.created_at,
-    rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1),
-    summary: item.description || item.summary
-  };
-};
+import { KhutbahPreview, Topic, Imam } from './types';
 
 export function useHomepageData() {
   const [data, setData] = useState<{
@@ -36,26 +16,20 @@ export function useHomepageData() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const querySelect = `
-          *,
-          imam:imams(id, name, slug, style, location),
-          khutbah_tags(tag:tags(id, name, slug))
-        `;
-
         const [latest, trending, classics, topics, imams] = await Promise.all([
           supabase
             .from('khutbahs')
-            .select(querySelect)
+            .select('id, title, author, imam_id, topic, tags, likes_count, comments_count, created_at, rating')
             .order('created_at', { ascending: false })
             .limit(6),
           supabase
             .from('khutbahs')
-            .select(querySelect)
+            .select('id, title, author, imam_id, topic, tags, likes_count, comments_count, created_at, rating')
             .order('likes_count', { ascending: false })
             .limit(6),
           supabase
             .from('khutbahs')
-            .select(querySelect)
+            .select('id, title, author, imam_id, topic, tags, likes_count, comments_count, created_at, rating')
             .gt('likes_count', 10)
             .limit(6),
           supabase
@@ -69,6 +43,19 @@ export function useHomepageData() {
             .order('khutbah_count', { ascending: false })
             .limit(15),
         ]);
+
+        const mapKhutbah = (item: any): KhutbahPreview => ({
+            id: item.id,
+            title: item.title,
+            author: item.author,
+            imam_id: item.imam_id,
+            topic: item.topic,
+            labels: item.tags,
+            likes: item.likes_count,
+            comments_count: item.comments_count,
+            published_at: item.created_at,
+            rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1)
+        });
 
         setData({
           latest: (latest.data || []).map(mapKhutbah),
@@ -105,11 +92,7 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
 
     let query = supabase
       .from('khutbahs')
-      .select(`
-        *,
-        imam:imams(id, name, slug, style, location),
-        khutbah_tags(tag:tags(id, name, slug))
-      `, { count: 'exact' });
+      .select('id, title, author, imam_id, topic, tags, likes_count, comments_count, created_at, rating', { count: 'exact' });
 
     if (filters.search) {
        query = query.or(`title.ilike.%${filters.search}%,author.ilike.%${filters.search}%`);
@@ -130,7 +113,18 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
     const { data: results, count: totalCount, error } = await query;
 
     if (!error && results) {
-        const mappedResults: KhutbahPreview[] = results.map(mapKhutbah);
+        const mappedResults: KhutbahPreview[] = results.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            author: item.author,
+            imam_id: item.imam_id,
+            topic: item.topic,
+            labels: item.tags,
+            likes: item.likes_count,
+            comments_count: item.comments_count,
+            published_at: item.created_at,
+            rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1)
+        }));
 
         setData(prev => reset ? mappedResults : [...prev, ...mappedResults]);
         setCount(totalCount || 0);

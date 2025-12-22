@@ -28,7 +28,7 @@ export default function App() {
   const [liveKhutbahId, setLiveKhutbahId] = useState<string | null>(null);
   const [editorKhutbahId, setEditorKhutbahId] = useState<string | null>(null);
   const [selectedImamId, setSelectedImamId] = useState<string | null>(null);
-  const [selectedTopicSlug, setSelectedTopicSlug] = useState<string | null>(null);
+  const [selectedTopicName, setSelectedTopicName] = useState<string | null>(null);
   const [librarySelectedKhutbahId, setLibrarySelectedKhutbahId] = useState<string | null>(null);
 
   // Helper to change tab and clear sub-state
@@ -36,19 +36,19 @@ export default function App() {
     setActiveTab(tab);
     if (tab !== 'imam-profile' && tab !== 'imam-details' && tab !== 'topic-view' && tab !== 'dashboard') {
       setSelectedImamId(null);
-      setSelectedTopicSlug(null);
+      setSelectedTopicName(null);
       setLibrarySelectedKhutbahId(null);
     }
   };
 
   const handleNavigateImam = (id: string) => {
     setSelectedImamId(id);
-    setSelectedTopicSlug(null);
+    setSelectedTopicName(null);
     setActiveTab('imam-profile');
   };
 
-  const handleNavigateTopic = (slug: string) => {
-    setSelectedTopicSlug(slug);
+  const handleNavigateTopic = (name: string) => {
+    setSelectedTopicName(name);
     setSelectedImamId(null);
     setActiveTab('topic-view');
   };
@@ -161,11 +161,13 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'topic-view' && selectedTopicSlug && (
+        {activeTab === 'topic-view' && selectedTopicName && (
           <TopicPage 
-            topicSlug={selectedTopicSlug}
+            topicName={selectedTopicName}
             onBack={() => setActiveTab('dashboard')}
             onSelectKhutbah={(id) => {
+              // Trigger detail view logic within Library if possible, 
+              // but for now simplest is to pass the state to Library and switch back
               setLibrarySelectedKhutbahId(id);
               setActiveTab('dashboard');
             }}
