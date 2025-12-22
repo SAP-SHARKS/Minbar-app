@@ -1,80 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Play, FileText, Clock, Eye, GraduationCap, 
-  BookOpen, ChevronRight, Mic, Users, Heart, Star 
+  BookOpen, ChevronRight, Mic, Users, Heart, Star, Loader2, AlertCircle 
 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
+
+interface LearningResource {
+  id: string;
+  title: string;
+  resource_type: 'video' | 'blog' | 'article';
+  duration_minutes: number;
+  category: string;
+  thumbnail_url?: string;
+  url: string;
+  author: string;
+  is_published: boolean;
+  view_count?: number | string;
+}
 
 export const LearningSection = ({ user }: { user: any }) => {
   const [activeFilter, setActiveFilter] = useState('All');
+  const [resources, setResources] = useState<LearningResource[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const resources = [
-    {
-      id: 1,
-      type: 'video',
-      title: 'The Prophetic Method of Public Speaking',
-      author: 'Sheikh Omar Suleiman',
-      duration: '15 min',
-      category: 'Delivery',
-      color: 'bg-indigo-100 text-indigo-600',
-      views: '12k'
-    },
-    {
-      id: 2,
-      type: 'article',
-      title: 'Structuring Your Jumu\'ah Khutbah: The 5 Pillars',
-      author: 'Mufti Menk',
-      duration: '5 min read',
-      category: 'Structure',
-      color: 'bg-emerald-100 text-emerald-600',
-      views: '8.5k'
-    },
-    {
-      id: 3,
-      type: 'video',
-      title: 'Engaging the Youth: Connecting with Gen Z',
-      author: 'Nouman Ali Khan',
-      duration: '22 min',
-      category: 'Engagement',
-      color: 'bg-orange-100 text-orange-600',
-      views: '18k'
-    },
-    {
-      id: 4,
-      type: 'article',
-      title: 'The Fiqh of the Khutbah: What is Mandatory?',
-      author: 'Dr. Yasir Qadhi',
-      duration: '12 min read',
-      category: 'Fiqh',
-      color: 'bg-purple-100 text-purple-600',
-      views: '5.2k'
-    },
-    {
-      id: 5,
-      type: 'video',
-      title: 'Voice Modulation and Body Language Techniques',
-      author: 'Br. Mohammed',
-      duration: '10 min',
-      category: 'Delivery',
-      color: 'bg-pink-100 text-pink-600',
-      views: '3.4k'
-    },
-    {
-      id: 6,
-      type: 'article',
-      title: 'Preparation Checklist: Before You Step on the Minbar',
-      author: 'Imam Zaid Shakir',
-      duration: '7 min read',
-      category: 'Preparation',
-      color: 'bg-teal-100 text-teal-600',
-      views: '9.1k'
+  const filters = ['All', 'Delivery', 'Structure', 'Fiqh', 'Engagement', 'Preparation'];
+
+  useEffect(() => {
+    async function fetchResources() {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error: sbError } = await supabase
+          .from('learning_resources')
+          .select('*')
+          .eq('is_published', true)
+          .order('created_at', { ascending: false });
+
+        if (sbError) throw sbError;
+        setResources(data || []);
+      } catch (err: any) {
+        console.error("Error fetching learning resources:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
-  ];
+
+    fetchResources();
+  }, []);
 
   const filteredResources = activeFilter === 'All' 
     ? resources 
     : resources.filter(r => r.category === activeFilter);
 
-  const filters = ['All', 'Delivery', 'Structure', 'Fiqh', 'Engagement', 'Preparation'];
+  const handleResourceClick = (url: string) => {
+    if (url) window.open(url, '_blank');
+  };
+
+  const getResourceStyles = (type: string) => {
+    if (type === 'video') {
+      return {
+        colorClass: 'bg-indigo-100 text-indigo-600',
+        icon: <Play className="ml-1 w-7 h-7 md:w-8 md:h-8 fill-current" />
+      };
+    }
+    return {
+      colorClass: 'bg-emerald-100 text-emerald-600',
+      icon: <FileText className="w-7 h-7 md:w-8 md:h-8" />
+    };
+  };
 
   return (
     <div className="flex h-full md:pl-20 bg-gray-50 overflow-y-auto w-full">
@@ -141,46 +136,73 @@ export const LearningSection = ({ user }: { user: any }) => {
           </div>
 
           {/* Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20 w-full">
-            {filteredResources.map(resource => (
-              <div key={resource.id} className="group bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer hover:-translate-y-2 overflow-hidden w-full">
-                <div className={`h-48 md:h-64 ${resource.color} relative flex items-center justify-center`}>
-                   <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                   <div className="w-16 md:w-20 h-16 md:h-20 bg-white rounded-full flex items-center justify-center shadow-md transform group-hover:scale-110 transition-transform duration-300 text-gray-800">
-           {resource.type === "video" ? (
-  <Play className="ml-1 w-7 h-7 md:w-8 md:h-8 fill-current" />
-) : (
-  <FileText className="w-7 h-7 md:w-8 md:h-8" />
-)}
-
-                   </div>
-                   <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-md text-white text-xs md:text-sm font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-                      {resource.type === 'video' ? <Clock size={14}/> : <BookOpen size={14}/>}
-                      {resource.duration}
-                   </div>
-                </div>
-                <div className="p-6 md:p-8">
-                   <div className="flex justify-between items-start mb-4">
-                     <span className={`text-[10px] md:text-xs uppercase font-bold tracking-wider px-3 py-1.5 rounded-lg bg-gray-100 text-gray-500`}>
-                        {resource.category}
-                     </span>
-                     <div className="flex items-center gap-1.5 text-gray-400 text-xs md:text-sm font-medium">
-                        <Eye size={16}/> {resource.views}
-                     </div>
-                   </div>
-                   <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-3 leading-tight group-hover:text-cyan-700 transition-colors line-clamp-2">
-                     {resource.title}
-                   </h3>
-                   <div className="flex items-center gap-3 mt-6">
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold text-gray-500">
-                        {resource.author.charAt(0)}
-                      </div>
-                      <span className="text-sm md:text-base font-medium text-gray-500">{resource.author}</span>
-                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+               <Loader2 className="animate-spin mb-4" size={48} />
+               <p className="font-bold uppercase tracking-widest">Loading Resources...</p>
+            </div>
+          ) : error ? (
+            <div className="bg-red-50 p-8 rounded-2xl border border-red-100 text-center max-w-xl mx-auto">
+               <AlertCircle size={40} className="mx-auto mb-4 text-red-500" />
+               <h3 className="text-xl font-bold text-red-900 mb-2">Connection Error</h3>
+               <p className="text-red-700">{error}</p>
+            </div>
+          ) : filteredResources.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20 w-full">
+              {filteredResources.map(resource => {
+                const { colorClass, icon } = getResourceStyles(resource.resource_type);
+                return (
+                  <div 
+                    key={resource.id} 
+                    onClick={() => handleResourceClick(resource.url)}
+                    className="group bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer hover:-translate-y-2 overflow-hidden w-full flex flex-col h-full"
+                  >
+                    <div className={`h-48 md:h-64 ${colorClass} relative flex items-center justify-center shrink-0`}>
+                       {resource.thumbnail_url && (
+                         <img 
+                          src={resource.thumbnail_url} 
+                          alt={resource.title} 
+                          className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                         />
+                       )}
+                       <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                       <div className="w-16 md:w-20 h-16 md:h-20 bg-white rounded-full flex items-center justify-center shadow-md transform group-hover:scale-110 transition-transform duration-300 text-gray-800 relative z-10">
+                         {icon}
+                       </div>
+                       <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-md text-white text-xs md:text-sm font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 z-10">
+                          {resource.resource_type === 'video' ? <Clock size={14}/> : <BookOpen size={14}/>}
+                          {resource.duration_minutes} {resource.resource_type === 'video' ? 'min' : 'min read'}
+                       </div>
+                    </div>
+                    <div className="p-6 md:p-8 flex flex-col flex-1">
+                       <div className="flex justify-between items-start mb-4">
+                         <span className={`text-[10px] md:text-xs uppercase font-bold tracking-wider px-3 py-1.5 rounded-lg bg-gray-100 text-gray-500`}>
+                            {resource.category}
+                         </span>
+                         <div className="flex items-center gap-1.5 text-gray-400 text-xs md:text-sm font-medium">
+                            <Eye size={16}/> {resource.view_count || '0'}
+                         </div>
+                       </div>
+                       <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-3 leading-tight group-hover:text-cyan-700 transition-colors line-clamp-2">
+                         {resource.title}
+                       </h3>
+                       <div className="flex items-center gap-3 mt-auto pt-6">
+                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold text-gray-500">
+                            {resource.author ? resource.author.charAt(0) : '?'}
+                          </div>
+                          <span className="text-sm md:text-base font-medium text-gray-500">{resource.author || 'Anonymous'}</span>
+                       </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-24 bg-white rounded-[2.5rem] border border-dashed border-gray-200">
+               <GraduationCap size={64} className="mx-auto mb-4 text-gray-200" />
+               <p className="text-gray-400 font-bold text-xl uppercase tracking-widest">No resources found in this category</p>
+            </div>
+          )}
           
         </div>
       </div>
