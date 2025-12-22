@@ -1,29 +1,90 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, ChevronLeft, User, FileText, 
   ThumbsUp, Star, Heart, MapPin, ChevronRight,
-  Calendar, Shield, CheckCircle
+  Calendar, Shield, CheckCircle, Loader2
 } from 'lucide-react';
 import { KhateebProfile } from '../types';
+import { supabase } from '../supabaseClient';
 
 interface KhateebFinderProps {
   onNavigateProfile: () => void;
 }
 
 export const KhateebFinder: React.FC<KhateebFinderProps> = ({ onNavigateProfile }) => {
-    // Simplified view state: either list or detail
     const [view, setView] = useState<'list' | 'detail'>('list');
     const [selectedKhateeb, setSelectedKhateeb] = useState<KhateebProfile | null>(null);
     const [search, setSearch] = useState("");
     const [styleFilter, setStyleFilter] = useState("All Styles");
+    const [khateebs, setKhateebs] = useState<KhateebProfile[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const khateebs: KhateebProfile[] = [
-        { id: 1, initial: "S", name: "Sheikh Abdullah", rating: 4.8, title: "Academic", location: "London", tags: ["Fiqh", "Family"], color: "bg-blue-100 text-blue-600", stats: { khutbahs: 142, likes: 850, reviews: 124 }, bio: "Graduate of Madinah University. Specializes in Fiqh and Youth Issues. Has served as an Imam for over 10 years in various communities across the UK.", reviewsList: [{id: 1, user: "Ali K.", rating: 5, text: "MashaAllah very knowledgeable."}, {id: 2, user: "Omar R.", rating: 4.5, text: "Excellent points, slightly long."}], khutbahsList: [{id: 1, title: "Importance of Salah", date: "Nov 2024", likes: 45}, {id: 2, title: "Rights of Parents", date: "Oct 2024", likes: 62}, {id: 3, title: "Modern Finance", date: "Sept 2024", likes: 38}] },
-        { id: 2, initial: "A", name: "Br. Ahmed Ali", rating: 3.2, title: "Motivational", location: "Manchester", tags: ["Youth", "Stories"], color: "bg-emerald-100 text-emerald-600", stats: { khutbahs: 45, likes: 320, reviews: 45 }, bio: "Youth worker and motivational speaker focusing on contemporary issues. Known for his engaging storytelling style that resonates with younger audiences.", reviewsList: [{id: 1, user: "Zaid M.", rating: 3, text: "Good energy but lacked depth."}], khutbahsList: [{id: 1, title: "Finding Purpose", date: "Dec 2024", likes: 12}, {id: 2, title: "Overcoming Anxiety", date: "Nov 2024", likes: 24}] },
-        { id: 3, initial: "K", name: "Dr. Karim H.", rating: 4.9, title: "Spiritual", location: "Birmingham", tags: ["Tafseer", "Heart"], color: "bg-purple-100 text-purple-600", stats: { khutbahs: 89, likes: 1200, reviews: 89 }, bio: "PhD in Islamic Studies. Focuses on Tazkiyah and spirituality. His khutbahs are known for being heart-softening and deeply reflective.", reviewsList: [{id: 1, user: "Hamza Y.", rating: 5, text: "Truly heart softening."}, {id: 2, user: "Bilal A.", rating: 5, text: "Best khutbah I've heard in years."}], khutbahsList: [{id: 1, title: "The Soft Heart", date: "Dec 2024", likes: 150}, {id: 2, title: "Journey to Allah", date: "Nov 2024", likes: 130}] }
-    ];
+    // Color helper for consistent UI
+    const getKhateebColor = (name: string) => {
+        const colors = [
+            "bg-blue-100 text-blue-600",
+            "bg-emerald-100 text-emerald-600",
+            "bg-purple-100 text-purple-600",
+            "bg-amber-100 text-amber-600",
+            "bg-rose-100 text-rose-600"
+        ];
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        return colors[Math.abs(hash) % colors.length];
+    };
 
-    const filteredKhateebs = khateebs.filter(k => k.name.toLowerCase().includes(search.toLowerCase()) || k.tags.some(t => t.toLowerCase().includes(search.toLowerCase())));
+    useEffect(() => {
+        const fetchImams = async () => {
+            setIsLoading(true);
+            console.log("🔍 Fetching Imams from database...");
+            
+            try {
+                const { data, error } = await supabase
+                    .from('imams')
+                    .select('id, name, slug, bio');
+
+                if (error) {
+                    console.warn("⚠️ Supabase fetching warning:", error.message);
+                    // Fixed: cast import.meta to any to access env in Vite
+                    if (!(import.meta as any).env.VITE_SUPABASE_URL) {
+                        console.warn("SUPABASE URL is undefined. Please check environment variables.");
+                    }
+                    setKhateebs([]);
+                } else {
+                    console.log("✅ Imams found:", data);
+                    
+                    // Map minimal DB data to the rich KhateebProfile UI interface
+                    const mappedKhateebs: KhateebProfile[] = (data || []).map((imam: any) => ({
+                        id: imam.id,
+                        initial: imam.name ? imam.name.charAt(0).toUpperCase() : "?",
+                        name: imam.name || "Unknown Imam",
+                        rating: 4.5, // Default rating for new system
+                        title: "Khateeb",
+                        location: "Community",
+                        tags: ["General"],
+                        color: getKhateebColor(imam.name || "unknown"),
+                        stats: { khutbahs: 0, likes: 0, reviews: 0 },
+                        bio: imam.bio || "No biography available.",
+                        reviewsList: [],
+                        khutbahsList: []
+                    }));
+                    
+                    setKhateebs(mappedKhateebs);
+                }
+            } catch (err) {
+                console.error("Critical error fetching imams:", err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchImams();
+    }, []);
+
+    const filteredKhateebs = khateebs.filter(k => 
+        k.name.toLowerCase().includes(search.toLowerCase()) || 
+        k.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))
+    );
     
     const handleViewDetails = (k: KhateebProfile) => { 
         setSelectedKhateeb(k); 
@@ -78,10 +139,7 @@ export const KhateebFinder: React.FC<KhateebFinderProps> = ({ onNavigateProfile 
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full">
-                    {/* Main Content: Bio, Khutbahs, Reviews */}
                     <div className="lg:col-span-2 space-y-8 min-w-0">
-                        
-                        {/* Bio Section */}
                         <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-200 shadow-sm">
                             <h3 className="font-bold text-gray-900 text-xl mb-4">About</h3>
                             <p className="text-gray-600 leading-relaxed text-base md:text-lg">{selectedKhateeb.bio}</p>
@@ -95,61 +153,61 @@ export const KhateebFinder: React.FC<KhateebFinderProps> = ({ onNavigateProfile 
                             </div>
                         </div>
 
-                        {/* Recorded Khutbahs */}
-                        <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="font-bold text-gray-900 text-xl">Recorded Khutbahs</h3>
-                                <button className="text-emerald-600 text-sm font-bold hover:underline">View All</button>
-                            </div>
-                            <div className="space-y-4">
-                                {selectedKhateeb.khutbahsList.map(item => (
-                                    <div key={item.id} className="group flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all cursor-pointer">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                                                <FileText size={18} />
+                        {selectedKhateeb.khutbahsList.length > 0 && (
+                            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-200 shadow-sm">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="font-bold text-gray-900 text-xl">Recorded Khutbahs</h3>
+                                    <button className="text-emerald-600 text-sm font-bold hover:underline">View All</button>
+                                </div>
+                                <div className="space-y-4">
+                                    {selectedKhateeb.khutbahsList.map(item => (
+                                        <div key={item.id} className="group flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all cursor-pointer">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                                                    <FileText size={18} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <h4 className="font-bold text-gray-900 group-hover:text-emerald-700 transition-colors truncate">{item.title}</h4>
+                                                    <span className="text-xs text-gray-500">{item.date}</span>
+                                                </div>
                                             </div>
-                                            <div className="min-w-0">
-                                                <h4 className="font-bold text-gray-900 group-hover:text-emerald-700 transition-colors truncate">{item.title}</h4>
-                                                <span className="text-xs text-gray-500">{item.date}</span>
+                                            <div className="flex items-center gap-3 text-gray-500 text-sm shrink-0">
+                                                <span className="flex items-center gap-1"><Heart size={14}/> {item.likes}</span>
+                                                <ChevronRight size={16} className="text-gray-300 group-hover:text-emerald-500"/>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3 text-gray-500 text-sm shrink-0">
-                                            <span className="flex items-center gap-1"><Heart size={14}/> {item.likes}</span>
-                                            <ChevronRight size={16} className="text-gray-300 group-hover:text-emerald-500"/>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Reviews */}
-                        <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="font-bold text-gray-900 text-xl">Community Reviews</h3>
-                                <div className="flex items-center gap-1 bg-yellow-50 text-yellow-700 px-3 py-1 rounded-lg font-bold">
-                                    <Star size={16} fill="currentColor"/> {selectedKhateeb.rating} <span className="text-yellow-600/60 font-normal">({selectedKhateeb.stats.reviews})</span>
+                                    ))}
                                 </div>
                             </div>
-                            <div className="space-y-6">
-                                {selectedKhateeb.reviewsList.map(review => (
-                                    <div key={review.id} className="border-b border-gray-100 last:border-0 pb-6 last:pb-0">
-                                        <div className="flex justify-between mb-2">
-                                            <span className="font-bold text-gray-900">{review.user}</span>
-                                            <div className="flex gap-0.5">
-                                                {[...Array(5)].map((_, i) => (
-                                                    <Star key={i} size={12} className={i < Math.floor(review.rating) ? "text-yellow-400 fill-current" : "text-gray-300"} />
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <p className="text-gray-600 italic">"{review.text}"</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                        )}
 
+                        {selectedKhateeb.reviewsList.length > 0 && (
+                            <div className="bg-white p-6 md:p-8 rounded-xl border border-gray-200 shadow-sm">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="font-bold text-gray-900 text-xl">Community Reviews</h3>
+                                    <div className="flex items-center gap-1 bg-yellow-50 text-yellow-700 px-3 py-1 rounded-lg font-bold">
+                                        <Star size={16} fill="currentColor"/> {selectedKhateeb.rating} <span className="text-yellow-600/60 font-normal">({selectedKhateeb.stats.reviews})</span>
+                                    </div>
+                                </div>
+                                <div className="space-y-6">
+                                    {selectedKhateeb.reviewsList.map(review => (
+                                        <div key={review.id} className="border-b border-gray-100 last:border-0 pb-6 last:pb-0">
+                                            <div className="flex justify-between mb-2">
+                                                <span className="font-bold text-gray-900">{review.user}</span>
+                                                <div className="flex gap-0.5">
+                                                    {[...Array(5)].map((_, i) => (
+                                                        <Star key={i} size={12} className={i < Math.floor(review.rating) ? "text-yellow-400 fill-current" : "text-gray-300"} />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <p className="text-gray-600 italic">"{review.text}"</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Sidebar: Booking Info */}
                     <div className="lg:col-span-1 space-y-6">
                         <div className="bg-emerald-50 p-6 md:p-8 rounded-xl border border-emerald-100 sticky top-6">
                             <h4 className="font-bold text-emerald-900 mb-6 text-lg flex items-center gap-2">
@@ -217,20 +275,34 @@ export const KhateebFinder: React.FC<KhateebFinderProps> = ({ onNavigateProfile 
                             <div className="flex-1 relative"><Search className="absolute left-3 top-3 text-gray-400" size={20} /><input type="text" placeholder="Search by name or topic..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500 transition-all"/></div>
                             <div className="flex gap-4"><select value={styleFilter} onChange={(e) => setStyleFilter(e.target.value)} className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none text-gray-700 cursor-pointer hover:bg-gray-100 w-full md:w-auto"><option>All Styles</option><option>Academic</option><option>Motivational</option><option>Spiritual</option></select></div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12 w-full">
-                            {filteredKhateebs.map(k => (
-                                <div key={k.id} onClick={() => handleViewDetails(k)} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-lg transition-all flex flex-col cursor-pointer group hover:-translate-y-1 w-full">
-                                    <div className="flex justify-between items-start mb-4"><div className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold ${k.color}`}>{k.initial}</div><div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded text-sm font-bold"><Star size={14} fill="currentColor" /> {k.rating}</div></div>
-                                    <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-emerald-600 transition-colors truncate">{k.name}</h3>
-                                    <div className="flex items-center gap-2 text-sm text-gray-500 mb-4"><span>{k.title}</span><span>•</span><span className="flex items-center gap-1"><MapPin size={12}/> {k.location}</span></div>
-                                    <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-4 text-xs font-bold text-gray-600"><div className="flex flex-col items-center"><span className="text-gray-900 text-sm">{k.stats.khutbahs}</span><span>Khutbahs</span></div><div className="w-px h-6 bg-gray-200"></div><div className="flex flex-col items-center"><span className="text-gray-900 text-sm">{k.stats.likes}</span><span>Likes</span></div><div className="w-px h-6 bg-gray-200"></div><div className="flex flex-col items-center"><span className="text-gray-900 text-sm">{k.stats.reviews}</span><span className="underline decoration-dotted">Reviews</span></div></div>
-                                    <div className="mt-auto flex items-center justify-between pt-4 border-t border-gray-50">
-                                        <span className="text-gray-500 text-sm font-medium group-hover:text-gray-900">View Details</span>
-                                        <button className="text-emerald-600 font-bold text-sm hover:text-emerald-700 hover:underline">Request Booking</button>
+
+                        {isLoading ? (
+                            <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+                                <Loader2 size={48} className="animate-spin text-emerald-500 mb-4" />
+                                <p className="font-bold uppercase tracking-widest text-sm">Accessing database...</p>
+                            </div>
+                        ) : filteredKhateebs.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-12 w-full">
+                                {filteredKhateebs.map(k => (
+                                    <div key={k.id} onClick={() => handleViewDetails(k)} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-lg transition-all flex flex-col cursor-pointer group hover:-translate-y-1 w-full">
+                                        <div className="flex justify-between items-start mb-4"><div className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold ${k.color}`}>{k.initial}</div><div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded text-sm font-bold"><Star size={14} fill="currentColor" /> {k.rating}</div></div>
+                                        <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-emerald-600 transition-colors truncate">{k.name}</h3>
+                                        <div className="flex items-center gap-2 text-sm text-gray-500 mb-4"><span>{k.title}</span><span>•</span><span className="flex items-center gap-1"><MapPin size={12}/> {k.location}</span></div>
+                                        <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg mb-4 text-xs font-bold text-gray-600"><div className="flex flex-col items-center"><span className="text-gray-900 text-sm">{k.stats.khutbahs}</span><span>Khutbahs</span></div><div className="w-px h-6 bg-gray-200"></div><div className="flex flex-col items-center"><span className="text-gray-900 text-sm">{k.stats.likes}</span><span>Likes</span></div><div className="w-px h-6 bg-gray-200"></div><div className="flex flex-col items-center"><span className="text-gray-900 text-sm">{k.stats.reviews}</span><span className="underline decoration-dotted">Reviews</span></div></div>
+                                        <div className="mt-auto flex items-center justify-between pt-4 border-t border-gray-50">
+                                            <span className="text-gray-500 text-sm font-medium group-hover:text-gray-900">View Details</span>
+                                            <button className="text-emerald-600 font-bold text-sm hover:text-emerald-700 hover:underline">Request Booking</button>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
+                                <Search size={48} className="mx-auto text-gray-300 mb-4 opacity-20" />
+                                <h3 className="text-xl font-bold text-gray-600">No imams found</h3>
+                                <p className="text-gray-400">Try adjusting your search criteria</p>
+                            </div>
+                        )}
                     </div>
                 ) : (renderDetailView())}
             </div>

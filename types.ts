@@ -15,6 +15,7 @@ export interface KhutbahPreview {
   likes: number;
   comments_count?: number;
   rating?: number; // Added rating
+  imam_slug?: string; // Added for linking
 }
 
 export interface Khutbah {
@@ -31,6 +32,7 @@ export interface Khutbah {
   file_url?: string;
   view_count?: number;
   rating?: number; // Added rating
+  imam_id?: string;
 }
 
 export interface KhutbahCard {
@@ -65,6 +67,10 @@ export interface Imam {
   city?: string;
   khutbah_count: number;
   is_verified?: boolean;
+  bio?: string;
+  review_count?: number;
+  comment_count?: number;
+  rating_avg?: number;
 }
 
 export interface AuthorData {

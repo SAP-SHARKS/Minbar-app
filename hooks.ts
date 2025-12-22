@@ -21,28 +21,37 @@ export function useHomepageData() {
           // Latest
           supabase
             .from('khutbahs')
-            .select('id, title, author, topic, tags, likes_count, comments_count, created_at, rating')
+            .select(`
+              id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+              imams ( slug )
+            `)
             .order('created_at', { ascending: false })
             .limit(6),
-          // Trending (Most Liked recently - simulated by likes for now)
+          // Trending
           supabase
             .from('khutbahs')
-            .select('id, title, author, topic, tags, likes_count, comments_count, created_at, rating')
+            .select(`
+              id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+              imams ( slug )
+            `)
             .order('likes_count', { ascending: false })
             .limit(6),
-          // Classics / Most Used (High engagement, older or just generally popular)
+          // Classics
           supabase
             .from('khutbahs')
-            .select('id, title, author, topic, tags, likes_count, comments_count, created_at, rating')
-            .gt('likes_count', 10) // Mock filter for "classics"
+            .select(`
+              id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+              imams ( slug )
+            `)
+            .gt('likes_count', 10)
             .limit(6),
-          // Topics - Increased limit to 12 to fill 2 rows of 6
+          // Topics
           supabase
             .from('topics')
             .select('*')
             .order('khutbah_count', { ascending: false })
             .limit(12),
-          // Imams - Increased limit to 15
+          // Imams
           supabase
             .from('imams')
             .select('*')
@@ -50,7 +59,6 @@ export function useHomepageData() {
             .limit(15),
         ]);
 
-        // Map data safely
         const mapKhutbah = (item: any): KhutbahPreview => ({
             id: item.id,
             title: item.title,
@@ -60,14 +68,15 @@ export function useHomepageData() {
             likes: item.likes_count,
             comments_count: item.comments_count,
             published_at: item.created_at,
-            rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1) // Mock rating
+            rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1),
+            imam_slug: item.imams?.slug
         });
 
         setData({
           latest: (latest.data || []).map(mapKhutbah),
           trending: (trending.data || []).map(mapKhutbah),
           classics: (classics.data || []).map(mapKhutbah),
-          featured: (trending.data || []).slice(0, 3).map(mapKhutbah), // reuse trending as featured for now
+          featured: (trending.data || []).slice(0, 3).map(mapKhutbah),
           topics: (topics.data || []),
           imams: (imams.data || []),
         });
@@ -98,23 +107,23 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
 
     let query = supabase
       .from('khutbahs')
-      .select('id, title, author, topic, tags, likes_count, comments_count, created_at, rating', { count: 'exact' });
+      .select(`
+        id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+        imams ( slug )
+      `, { count: 'exact' });
 
-    // Filters
     if (filters.search) {
        query = query.or(`title.ilike.%${filters.search}%,author.ilike.%${filters.search}%`);
     }
     if (filters.topic && filters.topic !== 'All') query = query.eq('topic', filters.topic);
     if (filters.imam) query = query.eq('author', filters.imam);
 
-    // Sorting
     if (filters.sort === 'trending') {
       query = query.order('likes_count', { ascending: false });
     } else {
       query = query.order('created_at', { ascending: false });
     }
 
-    // Pagination
     const from = pageNum * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
     query = query.range(from, to);
@@ -131,7 +140,8 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
             likes: item.likes_count,
             comments_count: item.comments_count,
             published_at: item.created_at,
-            rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1)
+            rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1),
+            imam_slug: item.imams?.slug
         }));
 
         setData(prev => reset ? mappedResults : [...prev, ...mappedResults]);

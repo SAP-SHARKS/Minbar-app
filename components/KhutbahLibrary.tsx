@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Play, FileText, ChevronLeft, Check, 
   MapPin, Star, Heart, MessageCircle, Send, Loader2, AlertCircle,
   Minus, Plus, Type, ChevronRight, TrendingUp, Grid, User,
-  BookOpen, Moon, Sun, Users, Activity, Bookmark, LayoutList, Sparkles
+  BookOpen, Moon, Sun, Users, Activity, Bookmark, LayoutList, Sparkles,
+  Calendar, Shield, CheckCircle
 } from 'lucide-react';
 import { AUTHORS_DATA } from '../constants';
-import { Khutbah, KhutbahPreview, AuthorData } from '../types';
+import { Khutbah, KhutbahPreview, AuthorData, Imam } from '../types';
 import { supabase } from '../supabaseClient';
 import { useHomepageData, usePaginatedKhutbahs, useInfiniteScroll } from '../hooks';
 import { useAuth } from '../contexts/AuthContext';
@@ -102,10 +103,11 @@ const getAvatarColor = (name: string) => {
 interface KhutbahCardProps {
   data: KhutbahPreview;
   onClick: () => void;
+  onImamClick?: (slug: string) => void;
 }
 
-const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick }) => (
-  <div onClick={onClick} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl cursor-pointer transition-all duration-300 group hover:-translate-y-1 h-full flex flex-col relative overflow-hidden">
+const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onImamClick }) => (
+  <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 h-full flex flex-col relative overflow-hidden">
     
     <div className="absolute top-6 right-6">
         <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded text-xs font-bold border border-amber-100">
@@ -126,13 +128,21 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick }) => (
       )}
     </div>
     
-    <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-emerald-700 transition-colors line-clamp-2 leading-tight">
+    <h3 onClick={onClick} className="text-xl font-bold text-gray-900 mb-3 group-hover:text-emerald-700 transition-colors line-clamp-2 leading-tight cursor-pointer">
         {data.title}
     </h3>
     
     <div className="flex items-center text-sm text-gray-500 mb-auto">
         <span className="text-xs font-medium uppercase tracking-wide text-gray-400 mr-2">By</span>
-        <span className="font-bold text-gray-900 bg-gray-50 px-2 py-0.5 rounded-md">{data.author}</span>
+        <span 
+          onClick={(e) => {
+            e.stopPropagation();
+            if (data.imam_slug && onImamClick) onImamClick(data.imam_slug);
+          }}
+          className={`font-semibold text-teal-600 hover:underline cursor-pointer bg-teal-50/50 px-2 py-0.5 rounded-md transition-colors`}
+        >
+          {data.author}
+        </span>
     </div>
     
     <div className="pt-5 border-t border-gray-50 mt-5 flex items-center justify-between">
@@ -174,11 +184,12 @@ interface ImamCardProps {
   name: string;
   count?: number;
   avatar_url?: string;
-  onClick: () => void;
+  slug?: string;
+  onClick: (slug: string) => void;
 }
 
-const ImamCard: React.FC<ImamCardProps> = ({ name, count, avatar_url, onClick }) => (
-    <div onClick={onClick} className="flex-shrink-0 w-40 bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all group mr-4">
+const ImamCard: React.FC<ImamCardProps> = ({ name, count, avatar_url, slug, onClick }) => (
+    <div onClick={() => slug && onClick(slug)} className="flex-shrink-0 w-40 bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all group mr-4">
         <div className={`w-20 h-20 rounded-full mx-auto mb-3 overflow-hidden border-2 border-transparent group-hover:border-emerald-200 transition-colors ${!avatar_url ? getAvatarColor(name) : 'bg-gray-100'}`}>
             {avatar_url ? (
                 <img src={avatar_url} alt={name} className="w-full h-full object-cover" />
@@ -197,10 +208,12 @@ const ImamCard: React.FC<ImamCardProps> = ({ name, count, avatar_url, onClick })
 
 const HomeView = ({ 
     onNavigate, 
-    onSelectKhutbah 
+    onSelectKhutbah,
+    onSelectImam
 }: { 
-    onNavigate: (view: 'home' | 'list', filter?: any) => void; 
+    onNavigate: (view: any, filter?: any) => void; 
     onSelectKhutbah: (k: KhutbahPreview) => void;
+    onSelectImam: (slug: string) => void;
 }) => {
     const { data, isLoading } = useHomepageData();
 
@@ -224,7 +237,7 @@ const HomeView = ({
                     <button onClick={() => onNavigate('list', { sort: 'latest' })} className="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">See All <ChevronRight size={14}/></button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {data.latest.map(k => <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} />)}
+                    {data.latest.map(k => <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} />)}
                 </div>
             </section>
 
@@ -238,7 +251,7 @@ const HomeView = ({
                     <button onClick={() => onNavigate('list', { sort: 'trending' })} className="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">See All <ChevronRight size={14}/></button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {data.trending.map(k => <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} />)}
+                    {data.trending.map(k => <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} />)}
                 </div>
             </section>
 
@@ -275,10 +288,10 @@ const HomeView = ({
                 </div>
                 <div className="flex overflow-x-auto pb-6 -mx-2 px-2 custom-scrollbar">
                     {data.imams.length > 0 ? data.imams.map(i => (
-                        <ImamCard key={i.id} name={i.name} count={i.khutbah_count} avatar_url={i.avatar_url} onClick={() => onNavigate('list', { imam: i.name })} />
+                        <ImamCard key={i.id} name={i.name} count={i.khutbah_count} avatar_url={i.avatar_url} slug={i.slug} onClick={onSelectImam} />
                     )) : (
                         ['Mufti Menk', 'Omar Suleiman', 'Nouman Ali Khan', 'Yasir Qadhi', 'Hamza Yusuf', 'Suhaib Webb'].map(i => (
-                            <ImamCard key={i} name={i} onClick={() => onNavigate('list', { imam: i })} />
+                            <ImamCard key={i} name={i} onClick={() => {}} />
                         ))
                     )}
                 </div>
@@ -296,7 +309,7 @@ const HomeView = ({
                 <div className="flex overflow-x-auto pb-6 -mx-2 px-2 custom-scrollbar gap-6">
                     {data.classics.map(k => (
                         <div key={k.id} className="min-w-[300px] w-[300px]">
-                            <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} />
+                            <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} />
                         </div>
                     ))}
                 </div>
@@ -309,12 +322,14 @@ const ListView = ({
     filters, 
     setFilters, 
     onSelectKhutbah,
-    onBack
+    onBack,
+    onSelectImam
 }: { 
     filters: any, 
     setFilters: (f: any) => void, 
     onSelectKhutbah: (k: KhutbahPreview) => void,
-    onBack: () => void
+    onBack: () => void,
+    onSelectImam: (slug: string) => void
 }) => {
     const { data, count, hasMore, isLoading, loadMore, refresh } = usePaginatedKhutbahs(filters);
     const lastElementRef = useInfiniteScroll(loadMore, hasMore, isLoading);
@@ -349,7 +364,7 @@ const ListView = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
                 {data.map((k, index) => (
                     <div key={k.id} ref={index === data.length - 1 ? lastElementRef : null}>
-                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} />
+                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} />
                     </div>
                 ))}
             </div>
@@ -371,10 +386,220 @@ const ListView = ({
     );
 };
 
+// --- New Imam Profile View Component ---
+
+const ImamProfileView = ({ 
+  slug, 
+  onBack,
+  onSelectKhutbah 
+}: { 
+  slug: string; 
+  onBack: () => void;
+  onSelectKhutbah: (k: KhutbahPreview) => void;
+}) => {
+  const [imam, setImam] = useState<Imam | null>(null);
+  const [sermons, setSermons] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sermonSearch, setSermonSearch] = useState('');
+  const [showFullDetails, setShowFullDetails] = useState(false);
+
+  useEffect(() => {
+    async function loadImamData() {
+      setLoading(true);
+      try {
+        // Fetch Imam profile
+        const { data: imamData, error: imamError } = await supabase
+          .from('imams')
+          .select('*')
+          .eq('slug', slug)
+          .single();
+        
+        if (imamError) throw imamError;
+        console.log("Loading Imam Data:", imamData);
+        setImam(imamData);
+
+        // Fetch sermons for this imam
+        const { data: sermonData, error: sermonError } = await supabase
+          .from('khutbahs')
+          .select('*')
+          .eq('imam_id', imamData.id)
+          .order('created_at', { ascending: false });
+        
+        if (sermonError) throw sermonError;
+        setSermons(sermonData || []);
+      } catch (err) {
+        console.error("Error loading imam profile:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadImamData();
+  }, [slug]);
+
+  const filteredSermons = useMemo(() => {
+    if (!sermonSearch) return sermons;
+    return sermons.filter(s => 
+      s.title.toLowerCase().includes(sermonSearch.toLowerCase()) ||
+      (s.topic && s.topic.toLowerCase().includes(sermonSearch.toLowerCase()))
+    );
+  }, [sermons, sermonSearch]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96">
+        <Loader2 size={48} className="animate-spin text-teal-600 mb-4" />
+        <p className="text-teal-800 font-bold">LOADING IMAM PROFILE</p>
+      </div>
+    );
+  }
+
+  if (!imam) return <div className="p-8 text-center">Imam profile not found.</div>;
+
+  return (
+    <div className="animate-in fade-in slide-in-from-right-8 duration-300 pb-20 w-full">
+      <button onClick={onBack} className="mb-3 flex items-center text-gray-500 hover:text-teal-600 gap-2 font-medium">
+        <ChevronLeft size={16} /> Back
+      </button>
+      
+      {/* Header Section - ULTRA COMPACT BANNER */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm mb-4 w-full relative overflow-hidden flex flex-col md:flex-row items-center gap-4">
+        <div className="flex items-center gap-4 flex-1 min-w-0 w-full">
+          {/* Profile Image - Smaller */}
+          <div className={`w-16 h-16 md:w-20 md:h-20 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 shadow-sm ${getAvatarColor(imam.name)}`}>
+            {imam.avatar_url ? <img src={imam.avatar_url} alt={imam.name} className="w-full h-full object-cover rounded-2xl" /> : imam.name.charAt(0)}
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+              <h1 className="text-xl md:text-2xl font-serif font-bold text-gray-900 truncate">{imam.name}</h1>
+              <span className="font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded text-[10px] uppercase whitespace-nowrap border border-teal-100">Verified Scholar</span>
+              {imam.city && (
+                <span className="flex items-center gap-1 text-gray-400 text-xs font-medium"><MapPin size={10}/> {imam.city}</span>
+              )}
+            </div>
+            
+            {/* Bio Snippet - Integrated */}
+            <p className="text-gray-500 text-xs md:text-sm truncate max-w-2xl mb-1.5">
+              {imam.bio || `Dr. ${imam.name} is a renowned scholar specializing in Islamic thought and community development.`}
+            </p>
+
+            {/* Inline Stats Row */}
+            <div className="flex items-center gap-5 text-gray-600">
+              <div className="flex items-center gap-1.5">
+                <BookOpen size={14} className="text-teal-500" />
+                <span className="text-sm font-bold text-gray-900">{imam.khutbah_count || 0}</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Sermons</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Star size={14} className="text-amber-400 fill-current" />
+                <span className="text-sm font-bold text-gray-900">{imam.rating_avg || '4.9'}</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Rating</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <MessageCircle size={14} className="text-blue-400" />
+                <span className="text-sm font-bold text-gray-900">{imam.review_count || 0}</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Reviews</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Area - Far Right */}
+        <div className="flex items-center gap-2 shrink-0">
+           <button className="bg-teal-600 text-white px-5 py-1.5 rounded-full text-xs font-bold shadow-md hover:bg-teal-700 transition-all">Follow</button>
+           <button className="bg-white border border-gray-200 text-gray-700 px-5 py-1.5 rounded-full text-xs font-bold hover:bg-gray-50 transition-all">Share</button>
+           <button 
+              onClick={() => setShowFullDetails(!showFullDetails)}
+              className="flex items-center gap-1 text-teal-600 font-bold text-xs hover:underline ml-2"
+            >
+              {showFullDetails ? 'Hide Details' : 'View Full Details'} <ChevronRight size={14} className={showFullDetails ? 'rotate-90 transition-transform' : 'transition-transform'} />
+            </button>
+        </div>
+      </div>
+
+      {/* Detailed View Collapsible Section */}
+      {showFullDetails && (
+        <div className="animate-in fade-in slide-in-from-top-4 duration-300 mb-6 grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+           <div className="space-y-4">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm"><Calendar size={16} className="text-teal-500" /> Booking Info</h3>
+              <div className="space-y-2 text-xs text-gray-600">
+                <div className="flex justify-between border-b border-gray-50 pb-2"><span>Travel Radius</span><span className="font-bold text-gray-900">50 Miles</span></div>
+                <div className="flex justify-between border-b border-gray-50 pb-2"><span>Min. Notice</span><span className="font-bold text-gray-900">2 Weeks</span></div>
+                <div className="flex justify-between border-b border-gray-50 pb-2"><span>Honorarium</span><span className="font-bold text-gray-900">£150-300</span></div>
+              </div>
+              <button className="w-full py-2 bg-teal-600 text-white rounded-lg font-bold text-xs shadow-md">Request Booking</button>
+           </div>
+           <div className="space-y-4">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm"><Shield size={16} className="text-teal-500" /> Verification</h3>
+              <ul className="space-y-2.5">
+                <li className="flex items-center gap-2 text-xs text-gray-600"><CheckCircle size={14} className="text-teal-500"/> Identity Verified</li>
+                <li className="flex items-center gap-2 text-xs text-gray-600"><CheckCircle size={14} className="text-teal-500"/> Background Check</li>
+                <li className="flex items-center gap-2 text-xs text-gray-600"><CheckCircle size={14} className="text-teal-500"/> References Checked</li>
+              </ul>
+           </div>
+           <div className="space-y-4">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm"><MessageCircle size={16} className="text-teal-500" /> Recent Reviews</h3>
+              <div className="space-y-3 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                <div className="p-2.5 bg-gray-50 rounded-xl">
+                  <div className="flex justify-between mb-0.5"><span className="text-[10px] font-bold">Admin A.</span><div className="flex text-amber-400"><Star size={8} fill="currentColor"/><Star size={8} fill="currentColor"/><Star size={8} fill="currentColor"/></div></div>
+                  <p className="text-[10px] text-gray-500 italic">"Punctual and very engaging with the youth."</p>
+                </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Sermon List Area - IMMEDIATELY VISIBLE AT TOP */}
+      <div className="w-full">
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+          <h2 className="text-xl font-bold text-gray-900">Recorded Sermons</h2>
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input 
+              type="text" 
+              placeholder="Filter sermons..." 
+              value={sermonSearch}
+              onChange={(e) => setSermonSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-1.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-teal-500 transition-all text-xs shadow-sm"
+            />
+          </div>
+        </div>
+
+        {filteredSermons.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredSermons.map(s => (
+              <KhutbahCard 
+                key={s.id} 
+                data={{
+                  id: s.id,
+                  title: s.title,
+                  author: imam.name,
+                  likes: s.likes_count || 0,
+                  topic: s.topic,
+                  labels: s.tags,
+                  published_at: s.created_at,
+                  rating: s.rating
+                }} 
+                onClick={() => onSelectKhutbah({ id: s.id } as any)} 
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-3xl border-2 border-dashed border-gray-100 p-12 text-center text-gray-400">
+             <FileText size={40} className="mx-auto mb-2 opacity-20" />
+             <p className="font-bold">No sermons found matching your criteria.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, onStartLive, onAddToMyKhutbahs }) => {
-  const [view, setView] = useState<'home' | 'list' | 'detail'>('home');
+  const [view, setView] = useState<'home' | 'list' | 'detail' | 'imam-profile'>('home');
   const [activeFilters, setActiveFilters] = useState<{ topic?: string, imam?: string, sort?: string, search?: string }>({});
   const [selectedKhutbahId, setSelectedKhutbahId] = useState<string | null>(null);
+  const [selectedImamSlug, setSelectedImamSlug] = useState<string | null>(null);
   
   // Detail View State
   const [detailData, setDetailData] = useState<Khutbah | null>(null);
@@ -387,12 +612,16 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   // AI Processing State
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Use requireAuth from AuthContext instead of local state
   const { user: authUser, requireAuth } = useAuth(); 
 
-  const handleNavigate = (newView: 'home' | 'list', filters: any = {}) => {
+  const handleNavigate = (newView: any, filters: any = {}) => {
       setActiveFilters(filters);
       setView(newView);
+  };
+
+  const handleSelectImam = (slug: string) => {
+    setSelectedImamSlug(slug);
+    setView('imam-profile');
   };
 
   const handleSelectKhutbah = async (preview: KhutbahPreview) => {
@@ -403,7 +632,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       setKhutbahCards([]);
       
       try {
-          // Fetch public detail
           const { data, error } = await supabase
             .from('khutbahs')
             .select('*')
@@ -418,25 +646,21 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   topic: data.topic,
                   labels: data.tags,
                   likes: data.likes_count,
-                  content: data.extracted_text || data.content, // Use extracted text or content
+                  content: data.extracted_text || data.content,
                   style: data.topic,
                   date: data.created_at ? new Date(data.created_at).toLocaleDateString() : undefined,
                   file_url: data.file_url,
                   comments: [] 
               });
 
-              // Fetch Cards
               const { data: cardsData } = await supabase
                   .from('khutbah_cards')
                   .select('*')
                   .eq('khutbah_id', data.id)
                   .order('card_number', { ascending: true });
 
-              if (cardsData) {
-                  setKhutbahCards(cardsData);
-              }
+              if (cardsData) setKhutbahCards(cardsData);
 
-              // Check if in my khutbahs using maybeSingle to avoid errors if not found
               const currentUser = authUser || user;
               if (currentUser) {
                   const { data: userData } = await supabase
@@ -461,11 +685,9 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     
     setIsProcessing(true);
     try {
-        // 1. Get raw text (fallback to content if no extracted_text)
         const rawText = detailData.content || ''; 
         if (!rawText) throw new Error("No content to process");
 
-        // 2. Format HTML
         const resFormat = await fetch('/api/process-khutbah', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -476,7 +698,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
         const dataFormat = await resFormat.json();
         const html = dataFormat.result;
 
-        // 3. Generate Cards
         const resCards = await fetch('/api/process-khutbah', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -488,15 +709,12 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
         
         let cardsJson = [];
         try {
-            // Clean markdown if present
             const cleanJson = dataCards.result.replace(/```json/g, '').replace(/```/g, '').trim();
             cardsJson = JSON.parse(cleanJson);
         } catch (e) {
-            console.warn("JSON Parse Error, attempting raw", e);
             cardsJson = JSON.parse(dataCards.result);
         }
 
-        // 4. Update Database
         const { error: updateError } = await supabase
             .from('khutbahs')
             .update({ content: html, extracted_text: html }) 
@@ -504,7 +722,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
         
         if (updateError) throw updateError;
 
-        // 5. Update Cards (Delete old, insert new)
         await supabase.from('khutbah_cards').delete().eq('khutbah_id', detailData.id);
         
         const cardsPayload = cardsJson.map((c: any) => ({
@@ -522,12 +739,10 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
         const { error: insertError } = await supabase.from('khutbah_cards').insert(cardsPayload);
         if (insertError) throw insertError;
 
-        // 6. Refresh
         handleSelectKhutbah({ id: detailData.id } as any);
         alert('Khutbah processed successfully!');
 
     } catch (err: any) {
-        console.error("AI Processing Failed:", err);
         alert("Processing failed: " + err.message);
     } finally {
         setIsProcessing(false);
@@ -539,13 +754,12 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
           if (!detailData) return;
           
           setAddingToMyKhutbahs(true);
-          const currentUser = authUser || user; // Should be set by requireAuth check
+          const currentUser = authUser || user;
 
           try {
               const userId = currentUser?.id;
               if (!userId) throw new Error("User not authenticated");
               
-              // 1. Create User Khutbah Copy
               const { data: userKhutbah, error: headerError } = await supabase
                 .from('user_khutbahs')
                 .insert({
@@ -560,7 +774,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
 
               if (headerError) throw headerError;
 
-              // 2. Fetch original cards
               const { data: originalCards } = await supabase
                 .from('khutbah_cards')
                 .select('*')
@@ -568,7 +781,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                 .order('card_number');
 
               if (originalCards && originalCards.length > 0) {
-                  // 3. Map to user cards
                   const userCards = originalCards.map(c => ({
                       user_khutbah_id: userKhutbah.id,
                       card_number: c.card_number,
@@ -591,13 +803,10 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
               }
 
               setIsInMyKhutbahs(true);
-              // If parent provided callback, call it (e.g. to navigate to editor)
               if (onAddToMyKhutbahs) onAddToMyKhutbahs(userKhutbah.id);
 
           } catch (err: any) {
-              console.error("Error copying khutbah:", err);
               const msg = err.message || JSON.stringify(err);
-              
               if (msg.includes("duplicate key")) {
                   alert("This khutbah is already in your collection.");
                   setIsInMyKhutbahs(true);
@@ -609,6 +818,22 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
           }
       });
   };
+
+  if (view === 'imam-profile' && selectedImamSlug) {
+      return (
+        <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
+            <div className="flex-1 overflow-y-auto">
+                <div className="page-container py-8 xl:py-12">
+                   <ImamProfileView 
+                      slug={selectedImamSlug} 
+                      onBack={() => setView('home')} 
+                      onSelectKhutbah={handleSelectKhutbah}
+                   />
+                </div>
+            </div>
+        </div>
+      );
+  }
 
   if (view === 'detail') {
       if (detailLoading || !detailData) return <div className="h-screen flex items-center justify-center"><Loader2 size={48} className="animate-spin text-emerald-600"/></div>;
@@ -776,13 +1001,14 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
           )}
         </div>
 
-        {view === 'home' && <HomeView onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} />}
+        {view === 'home' && <HomeView onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} />}
         {view === 'list' && (
             <ListView 
                 filters={activeFilters} 
                 setFilters={setActiveFilters} 
                 onSelectKhutbah={handleSelectKhutbah}
                 onBack={() => setView('home')} 
+                onSelectImam={handleSelectImam}
             />
         )}
         
