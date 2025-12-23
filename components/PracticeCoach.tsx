@@ -28,6 +28,7 @@ interface SessionSummary {
   repetitiveWords: string[];
 }
 
+// Hardcoded API Key for testing/sandbox stability
 const DEEPGRAM_KEY = 'a4a849d30b5edbcd6150dd47834442e12a9413ee';
 
 export const PracticeCoach = ({ user }: { user: any }) => {
@@ -52,6 +53,7 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pitchHistoryRef = useRef<number[]>([]);
   const wordFrequencyRef = useRef<Record<string, number>>({});
+  const keepAliveIntervalRef = useRef<any>(null);
   
   // Volume/Tone state
   const [volumeLevel, setVolumeLevel] = useState(0);
@@ -82,9 +84,13 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   // --- Deepgram Implementation ---
   const startDeepgramStream = async () => {
     try {
+      // Ensure existing resources are cleaned before a fresh start
+      cleanup(false); // don't stop the session time if it's just a reconnect
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       initAudioAnalysis(stream);
 
+      // Secure WebSocket URL with direct authentication token
       const baseUrl = 'wss://api.deepgram.com/v1/listen';
       const params = new URLSearchParams({
         model: 'nova-3',
@@ -94,9 +100,19 @@ export const PracticeCoach = ({ user }: { user: any }) => {
         token: DEEPGRAM_KEY
       });
 
+      console.log('[Deepgram] Initializing secure connection...');
       const socket = new WebSocket(`${baseUrl}?${params.toString()}`);
 
       socket.onopen = () => {
+        console.log('[Deepgram] WebSocket connection opened');
+        
+        // ADDED: 1-second Keep-Alive ping to prevent proxy/idle timeouts (Fix for 1006)
+        keepAliveIntervalRef.current = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'KeepAlive' }));
+          }
+        }, 1000);
+
         const mimeType = MediaRecorder.isTypeSupported('audio/webm; codecs=opus') ? 'audio/webm; codecs=opus' : 'audio/webm';
         const recorder = new MediaRecorder(stream, { mimeType });
         recorder.addEventListener('dataavailable', (event) => {
@@ -122,13 +138,34 @@ export const PracticeCoach = ({ user }: { user: any }) => {
         }
       };
 
-      socket.onerror = () => setError("Deepgram connection failed. Please check your network.");
-      socket.onclose = (e) => {
-        if (e.code === 4001 || e.code === 4003) setError("Deepgram Auth failed.");
+      socket.onerror = (event) => {
+        console.error('[Deepgram] WebSocket Error:', event);
+        setError("Transcription engine encountered an error.");
       };
+
+      socket.onclose = (event) => {
+        // Clear keep-alive on close
+        if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
+        
+        console.log(`[Deepgram] WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`);
+        
+        // ADDED: Reconnection logic for Error 1006
+        if (event.code === 1006 && isRecording) {
+          console.warn("[Deepgram] Abnormal closure (1006). Attempting silent reconnection...");
+          // Short delay before reconnecting to prevent loops
+          setTimeout(() => {
+            if (isRecording) startDeepgramStream();
+          }, 1000);
+        } else if (event.code === 4001 || event.code === 4003) {
+          setError("Deepgram Auth failed. Please verify API key.");
+          setIsRecording(false);
+        }
+      };
+      
       socketRef.current = socket;
     } catch (err) {
-      setError("Microphone access denied.");
+      console.error('[Deepgram] Setup Error:', err);
+      setError("Microphone access denied or connection failed.");
       setIsRecording(false);
     }
   };
@@ -167,7 +204,11 @@ export const PracticeCoach = ({ user }: { user: any }) => {
         setTranscript(prev => prev + " " + finalTranscript);
       };
 
-      recognition.onerror = (e: any) => setError(`Local Recognition Error: ${e.error}`);
+      recognition.onerror = (e: any) => {
+        console.error('[Local Speech] Error:', e.error);
+        setError(`Local Recognition Error: ${e.error}`);
+      };
+      
       recognition.start();
       recognitionRef.current = recognition;
     } catch (err) {
@@ -237,7 +278,7 @@ export const PracticeCoach = ({ user }: { user: any }) => {
 
     // After 1 minute, flag repetitive non-filler words
     if (elapsedTime > 60) {
-      const repetitive = Object.entries(wordFrequencyRef.current)
+      const repetitive = (Object.entries(wordFrequencyRef.current) as [string, number][])
         .filter(([_, count]) => count > 3)
         .map(([w]) => w);
       setRepetitiveFlags(repetitive);
@@ -254,9 +295,10 @@ export const PracticeCoach = ({ user }: { user: any }) => {
     return () => cleanup();
   }, [isRecording, activeTab]);
 
-  const cleanup = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+  const cleanup = (fullCleanup = true) => {
+    if (fullCleanup && timerRef.current) clearInterval(timerRef.current);
     if (volumeIntervalRef.current) clearInterval(volumeIntervalRef.current);
+    if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
     
     // Safety narrowed checks for refs
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -265,6 +307,7 @@ export const PracticeCoach = ({ user }: { user: any }) => {
     
     if (socketRef.current) {
       try { socketRef.current.close(); } catch (e) {}
+      socketRef.current = null;
     }
     
     if (recognitionRef.current) {
@@ -294,7 +337,7 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   }, [wpm, isRecording, elapsedTime]);
 
   const generateSummary = () => {
-    const totalFillers = Object.values(fillerCount).reduce((a, b) => a + b, 0);
+    const totalFillers = (Object.values(fillerCount) as number[]).reduce((a, b) => a + b, 0);
     const fillerPct = wordCount > 0 ? (totalFillers / wordCount) * 100 : 0;
     const clarity = Math.max(0, 100 - (fillerPct * 3));
     const confidence = Math.min(100, Math.round(clarity + (volumeLevel > 35 ? 10 : 0) + (!monotoneWarning ? 15 : 0)));

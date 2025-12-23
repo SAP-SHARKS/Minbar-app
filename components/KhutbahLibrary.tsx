@@ -82,77 +82,83 @@ const getAvatarColor = (name: string) => {
 interface KhutbahCardProps {
   data: KhutbahPreview;
   onClick: () => void;
-  onImamClick?: (slug: string) => void;
+  onAuthorClick?: (authorName: string) => void;
   onTagClick?: (slug: string) => void;
 }
 
-const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onImamClick, onTagClick }) => (
-  <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 h-full flex flex-col relative overflow-hidden">
-    
-    <div className="absolute top-6 right-6">
-        <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded text-xs font-bold border border-amber-100">
-            <Star size={12} fill="currentColor" /> {data.rating || '4.8'}
-        </div>
-    </div>
+const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick, onTagClick }) => {
+  const handleAuthorClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onAuthorClick) {
+      onAuthorClick(data.author);
+    }
+  };
 
-    <div className="flex flex-wrap gap-2 mb-4 pr-16">
-      {data.labels && data.labels.slice(0, 3).map((label, idx) => (
+  return (
+    <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 h-full flex flex-col relative overflow-hidden">
+      
+      <div className="absolute top-6 right-6">
+          <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded text-xs font-bold border border-amber-100">
+              <Star size={12} fill="currentColor" /> {data.rating || '4.8'}
+          </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4 pr-16">
+        {data.labels && data.labels.slice(0, 3).map((label, idx) => (
+            <span 
+              key={idx} 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onTagClick) onTagClick(label.toLowerCase().trim().replace(/\s+/g, '-'));
+              }}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:bg-teal-100 transition-colors ${getTagStyles(label)}`}
+            >
+                {label}
+            </span>
+        ))}
+        {(!data.labels || data.labels.length === 0) && data.topic && (
+            <span 
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onTagClick) onTagClick(data.topic?.toLowerCase().trim().replace(/\s+/g, '-') || '');
+              }}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:bg-teal-100 transition-colors ${getTagStyles(data.topic)}`}
+            >
+                {data.topic}
+            </span>
+        )}
+      </div>
+      
+      <h3 onClick={onClick} className="text-xl font-bold text-gray-900 mb-3 group-hover:text-emerald-700 transition-colors line-clamp-2 leading-tight cursor-pointer">
+          {data.title}
+      </h3>
+      
+      <div className="flex items-center text-sm text-gray-500 mb-auto">
+          <span className="text-xs font-medium uppercase tracking-wide text-gray-400 mr-2">By</span>
           <span 
-            key={idx} 
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onTagClick) onTagClick(label.toLowerCase().trim().replace(/\s+/g, '-'));
-            }}
-            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:bg-teal-100 transition-colors ${getTagStyles(label)}`}
+            onClick={handleAuthorClick}
+            className="font-bold text-gray-900 bg-gray-50 px-2 py-0.5 rounded-md hover:bg-emerald-50 hover:text-emerald-700 hover:underline transition-colors cursor-pointer"
           >
-              {label}
+            {data.author}
           </span>
-      ))}
-      {(!data.labels || data.labels.length === 0) && data.topic && (
-          <span 
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onTagClick) onTagClick(data.topic?.toLowerCase().trim().replace(/\s+/g, '-') || '');
-            }}
-            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:bg-teal-100 transition-colors ${getTagStyles(data.topic)}`}
-          >
-              {data.topic}
-          </span>
-      )}
+      </div>
+      
+      <div className="pt-5 border-t border-gray-50 mt-5 flex items-center justify-between">
+         <div className="flex items-center gap-4">
+             <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-red-500 transition-colors">
+                 <Heart size={14} className="text-gray-400 group-hover:text-red-500 transition-colors" /> 
+                 {data.likes}
+             </span>
+             <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-500 transition-colors">
+                 <MessageCircle size={14} className="text-gray-400 group-hover:text-blue-500 transition-colors" /> 
+                 {data.comments_count || 0}
+             </span>
+         </div>
+         <span className="text-xs text-gray-400">{data.published_at ? new Date(data.published_at).toLocaleDateString() : 'Recently'}</span>
+      </div>
     </div>
-    
-    <h3 onClick={onClick} className="text-xl font-bold text-gray-900 mb-3 group-hover:text-emerald-700 transition-colors line-clamp-2 leading-tight cursor-pointer">
-        {data.title}
-    </h3>
-    
-    <div className="flex items-center text-sm text-gray-500 mb-auto">
-        <span className="text-xs font-medium uppercase tracking-wide text-gray-400 mr-2">By</span>
-        <span 
-          onClick={(e) => {
-            e.stopPropagation();
-            if (data.imam_slug && onImamClick) onImamClick(data.imam_slug);
-          }}
-          className={`font-semibold text-teal-600 hover:underline cursor-pointer bg-teal-50/50 px-2 py-0.5 rounded-md transition-colors`}
-        >
-          {data.author}
-        </span>
-    </div>
-    
-    <div className="pt-5 border-t border-gray-50 mt-5 flex items-center justify-between">
-       <div className="flex items-center gap-4">
-           <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-red-500 transition-colors">
-               <Heart size={14} className="text-gray-400 group-hover:text-red-500 transition-colors" /> 
-               {data.likes}
-           </span>
-           <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-500 transition-colors">
-               <MessageCircle size={14} className="text-gray-400 group-hover:text-blue-500 transition-colors" /> 
-               {data.comments_count || 0}
-           </span>
-       </div>
-       <span className="text-xs text-gray-400">{data.published_at ? new Date(data.published_at).toLocaleDateString() : 'Recently'}</span>
-    </div>
-  </div>
-);
+  );
+};
 
 interface TopicCardProps {
   name: string;
@@ -225,7 +231,6 @@ const TopicPageView = ({
         console.log(`[TopicPage] Starting 3-step fetch for slug: ${slug}`);
 
         // STEP A: Fetch the tag object from the tags table using the slug from the URL.
-        // We avoid .single() to prevent coercion errors and use array indexing instead.
         const { data: tagDataArray, error: tagError } = await supabase
           .from('tags')
           .select('id, name, slug')
@@ -256,7 +261,6 @@ const TopicPageView = ({
         }
 
         // STEP C: Fetch full khutbah details from the khutbahs table for all IDs found in Step B.
-        // This process is stable even for high volume (900+ IDs).
         const { data: khutbahData, error: khutbahError } = await supabase
           .from('khutbahs')
           .select(`
@@ -291,6 +295,11 @@ const TopicPageView = ({
     }
     loadTopicData();
   }, [slug]);
+
+  const handleAuthorClick = (authorName: string) => {
+    // Navigate back to parent and trigger list filter
+    onBack();
+  };
 
   const filteredKhutbahs = useMemo(() => {
     if (!searchQuery.trim()) return allKhutbahs;
@@ -331,7 +340,6 @@ const TopicPageView = ({
           <p className="text-gray-500 text-xl">Showing {filteredKhutbahs.length} sermons tagged with "{tagInfo?.name}"</p>
         </div>
         
-        {/* Search through results locally */}
         <div className="relative w-full md:w-96">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input 
@@ -351,7 +359,7 @@ const TopicPageView = ({
               key={k.id} 
               data={k} 
               onClick={() => onSelectKhutbah(k)} 
-              onImamClick={onSelectImam}
+              onAuthorClick={() => handleAuthorClick(k.author)}
               onTagClick={onTagClick}
             />
           ))}
@@ -592,6 +600,10 @@ const ImamProfileView = ({
     );
   }, [sermons, sermonSearch]);
 
+  const handleAuthorClick = (authorName: string) => {
+    onBack();
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-96">
@@ -692,6 +704,7 @@ const ImamProfileView = ({
                   imam_slug: s.imams?.slug
                 }} 
                 onClick={() => onSelectKhutbah({ id: s.id } as any)} 
+                onAuthorClick={() => handleAuthorClick(imam.name)}
                 onTagClick={onTagClick}
               />
             ))}
@@ -720,6 +733,10 @@ const HomeView = ({
 }) => {
     const { data, isLoading } = useHomepageData();
 
+    const handleAuthorClick = (authorName: string) => {
+        onNavigate('list', { imam: authorName });
+    };
+
     if (isLoading || !data) {
         return (
             <div className="flex justify-center items-center h-64">
@@ -739,7 +756,15 @@ const HomeView = ({
                     <button onClick={() => onNavigate('list', { sort: 'latest' })} className="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">See All <ChevronRight size={14}/></button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {data.latest.map(k => <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} onTagClick={onTagClick} />)}
+                    {data.latest.map(k => (
+                        <KhutbahCard 
+                            key={k.id} 
+                            data={k} 
+                            onClick={() => onSelectKhutbah(k)} 
+                            onAuthorClick={handleAuthorClick}
+                            onTagClick={onTagClick} 
+                        />
+                    ))}
                 </div>
             </section>
 
@@ -752,7 +777,15 @@ const HomeView = ({
                     <button onClick={() => onNavigate('list', { sort: 'trending' })} className="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">See All <ChevronRight size={14}/></button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {data.trending.map(k => <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} onTagClick={onTagClick} />)}
+                    {data.trending.map(k => (
+                        <KhutbahCard 
+                            key={k.id} 
+                            data={k} 
+                            onClick={() => onSelectKhutbah(k)} 
+                            onAuthorClick={handleAuthorClick}
+                            onTagClick={onTagClick} 
+                        />
+                    ))}
                 </div>
             </section>
 
@@ -807,7 +840,12 @@ const HomeView = ({
                 <div className="flex overflow-x-auto pb-6 -mx-4 px-4 custom-scrollbar gap-6">
                     {data.classics.map(k => (
                         <div key={k.id} className="min-w-[300px] w-[300px]">
-                            <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} onTagClick={onTagClick} />
+                            <KhutbahCard 
+                                data={k} 
+                                onClick={() => onSelectKhutbah(k)} 
+                                onAuthorClick={handleAuthorClick}
+                                onTagClick={onTagClick} 
+                            />
                         </div>
                     ))}
                 </div>
@@ -833,6 +871,10 @@ const ListView = ({
 }) => {
     const { data, count, hasMore, isLoading, loadMore, refresh } = usePaginatedKhutbahs(filters);
     const lastElementRef = useInfiniteScroll(loadMore, hasMore, isLoading);
+
+    const handleAuthorClick = (authorName: string) => {
+        setFilters({ ...filters, imam: authorName });
+    };
 
     useEffect(() => {
         refresh();
@@ -864,7 +906,12 @@ const ListView = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
                 {data.map((k, index) => (
                     <div key={k.id} ref={index === data.length - 1 ? lastElementRef : null}>
-                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onImamClick={onSelectImam} onTagClick={onTagClick} />
+                        <KhutbahCard 
+                            data={k} 
+                            onClick={() => onSelectKhutbah(k)} 
+                            onAuthorClick={handleAuthorClick}
+                            onTagClick={onTagClick} 
+                        />
                     </div>
                 ))}
             </div>
