@@ -178,11 +178,15 @@ export const PracticeCoach = ({ user }: { user: any }) => {
 
   const initAudioAnalysis = (stream: MediaStream) => {
     const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-    audioContextRef.current = new AudioCtx();
-    const source = audioContextRef.current.createMediaStreamSource(stream);
-    analyserRef.current = audioContextRef.current.createAnalyser();
-    analyserRef.current.fftSize = 2048;
-    source.connect(analyserRef.current);
+    const ctx = new AudioCtx();
+    audioContextRef.current = ctx;
+    
+    const source = ctx.createMediaStreamSource(stream);
+    const analyzer = ctx.createAnalyser();
+    analyserRef.current = analyzer;
+    analyzer.fftSize = 2048;
+    source.connect(analyzer);
+    
     volumeIntervalRef.current = setInterval(monitorAudio, 150);
   };
 
@@ -251,12 +255,27 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   }, [isRecording, activeTab]);
 
   const cleanup = () => {
-    clearInterval(timerRef.current);
-    clearInterval(volumeIntervalRef.current);
-    if (mediaRecorderRef.current?.state !== 'inactive') mediaRecorderRef.current?.stop();
-    if (socketRef.current) socketRef.current.close();
-    if (recognitionRef.current) recognitionRef.current.stop();
-    if (audioContextRef.current?.state !== 'closed') audioContextRef.current?.close();
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (volumeIntervalRef.current) clearInterval(volumeIntervalRef.current);
+    
+    // Safety narrowed checks for refs
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
+    }
+    
+    if (socketRef.current) {
+      try { socketRef.current.close(); } catch (e) {}
+    }
+    
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (e) {}
+    }
+
+    const ctx = audioContextRef.current;
+    if (ctx && ctx.state !== 'closed') {
+      try { ctx.close(); } catch (e) {}
+    }
+
     setVolumeLevel(0);
     setMonotoneWarning(false);
   };
