@@ -395,8 +395,8 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   };
 
   return (
-    <div className="flex h-screen md:pl-20 bg-gray-50 overflow-hidden">
-      <div className="flex-1 flex flex-col p-8 overflow-y-auto custom-scrollbar">
+    <div className="flex min-h-screen md:pl-20 bg-gray-50 overflow-y-auto">
+      <div className="flex-1 flex flex-col p-8 pb-16 overflow-y-auto custom-scrollbar">
         <header className="flex justify-between items-end mb-8 shrink-0">
           <div>
             <h2 className="text-4xl font-bold text-gray-900 flex items-center gap-3 tracking-tight">
