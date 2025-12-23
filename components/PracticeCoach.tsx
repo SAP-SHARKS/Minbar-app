@@ -396,7 +396,7 @@ export const PracticeCoach = ({ user }: { user: any }) => {
 
   return (
     <div className="flex min-h-screen md:pl-20 bg-gray-50 overflow-y-auto">
-      <div className="flex-1 flex flex-col p-8 pb-16 overflow-y-auto custom-scrollbar">
+      <div className="flex-1 flex flex-col p-8 pb-32 overflow-y-auto custom-scrollbar">
         <header className="flex justify-between items-end mb-8 shrink-0">
           <div>
             <h2 className="text-4xl font-bold text-gray-900 flex items-center gap-3 tracking-tight">
@@ -453,7 +453,7 @@ export const PracticeCoach = ({ user }: { user: any }) => {
 
           <div className="lg:col-span-4 flex flex-col gap-6">
             {summary && (
-                <div className="bg-gradient-to-br from-gray-900 to-indigo-900 rounded-[2rem] p-8 text-white shadow-2xl animate-in zoom-in duration-300 relative overflow-hidden">
+                <div className="bg-gradient-to-br from-gray-900 to-indigo-900 rounded-[2rem] p-8 text-white shadow-2xl animate-in zoom-in duration-300 relative">
                     <div className="relative z-10">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-lg font-bold flex items-center gap-2"><Trophy size={20} className="text-amber-400" /> Toastmasters Summary</h3>
