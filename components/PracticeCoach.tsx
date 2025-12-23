@@ -48,6 +48,7 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   // Audio & API Refs
   const socketRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<any>(null);
   const timerRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -84,10 +85,11 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   // --- Deepgram Implementation ---
   const startDeepgramStream = async () => {
     try {
-      // Ensure existing resources are cleaned before a fresh start
-      cleanup(false); // don't stop the session time if it's just a reconnect
+      // Clear any technical state before a fresh attempt (reconnection)
+      cleanup(false); 
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       initAudioAnalysis(stream);
 
       // Secure WebSocket URL with direct authentication token
@@ -100,18 +102,17 @@ export const PracticeCoach = ({ user }: { user: any }) => {
         token: DEEPGRAM_KEY
       });
 
-      console.log('[Deepgram] Initializing secure connection...');
       const socket = new WebSocket(`${baseUrl}?${params.toString()}`);
 
       socket.onopen = () => {
-        console.log('[Deepgram] WebSocket connection opened');
+        console.log("Deepgram Active"); 
         
-        // ADDED: 1-second Keep-Alive ping to prevent proxy/idle timeouts (Fix for 1006)
+        // Start Heartbeat (Keep-Alive) every 3 seconds to prevent timeout
         keepAliveIntervalRef.current = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: 'KeepAlive' }));
           }
-        }, 1000);
+        }, 3000);
 
         const mimeType = MediaRecorder.isTypeSupported('audio/webm; codecs=opus') ? 'audio/webm; codecs=opus' : 'audio/webm';
         const recorder = new MediaRecorder(stream, { mimeType });
@@ -125,47 +126,56 @@ export const PracticeCoach = ({ user }: { user: any }) => {
       };
 
       socket.onmessage = (message) => {
-        const received = JSON.parse(message.data);
-        const transcriptChunk = received.channel?.alternatives[0]?.transcript;
-        const words = received.channel?.alternatives[0]?.words || [];
+        try {
+          const received = JSON.parse(message.data);
+          const transcriptChunk = received.channel?.alternatives[0]?.transcript;
+          const words = received.channel?.alternatives[0]?.words || [];
 
-        if (received.is_final && transcriptChunk) {
-          setTranscript(prev => (prev ? prev + " " + transcriptChunk : transcriptChunk));
-          processWords(words.map((w: any) => ({ 
-            word: w.word, 
-            isFiller: w.filler || fillerWords.some(fw => fw.word.toLowerCase() === w.word.toLowerCase())
-          })));
+          if (received.is_final && transcriptChunk) {
+            setTranscript(prev => (prev ? prev + " " + transcriptChunk : transcriptChunk));
+            processWords(words.map((w: any) => ({ 
+              word: w.word, 
+              isFiller: w.filler || fillerWords.some(fw => fw.word.toLowerCase() === w.word.toLowerCase())
+            })));
+          }
+        } catch (e) {
+          // Swallow malformed frames or Deepgram internal control messages
         }
       };
 
       socket.onerror = (event) => {
-        console.error('[Deepgram] WebSocket Error:', event);
-        setError("Transcription engine encountered an error.");
+        // Detailed logging for cryptic WebSocket errors
+        console.error('[Deepgram] WebSocket encountered an error event:', {
+          state: socket.readyState,
+          url: socket.url,
+          type: event.type
+        });
       };
 
       socket.onclose = (event) => {
-        // Clear keep-alive on close
-        if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
+        if (keepAliveIntervalRef.current) {
+          clearInterval(keepAliveIntervalRef.current);
+          keepAliveIntervalRef.current = null;
+        }
         
-        console.log(`[Deepgram] WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`);
+        console.log(`[Deepgram] WebSocket closed. Status code: ${event.code}`);
         
-        // ADDED: Reconnection logic for Error 1006
+        // Handle abnormal closures (1006) which often occur in transient network conditions
         if (event.code === 1006 && isRecording) {
-          console.warn("[Deepgram] Abnormal closure (1006). Attempting silent reconnection...");
-          // Short delay before reconnecting to prevent loops
+          console.warn("[Deepgram] Abnormal closure detected. Silently reconnecting...");
           setTimeout(() => {
             if (isRecording) startDeepgramStream();
-          }, 1000);
+          }, 1500);
         } else if (event.code === 4001 || event.code === 4003) {
-          setError("Deepgram Auth failed. Please verify API key.");
+          setError("Transcription authentication failed. Please refresh the session.");
           setIsRecording(false);
         }
       };
       
       socketRef.current = socket;
     } catch (err) {
-      console.error('[Deepgram] Setup Error:', err);
-      setError("Microphone access denied or connection failed.");
+      console.error('[Deepgram] Setup failed:', err);
+      setError("Unable to start AI Coach. Check microphone permissions.");
       setIsRecording(false);
     }
   };
@@ -174,13 +184,14 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   const startLocalRecognition = async () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setError("Native Speech Recognition not supported in this browser.");
+      setError("Native speech coaching is not supported in this browser.");
       setIsRecording(false);
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       initAudioAnalysis(stream);
 
       const recognition = new SpeechRecognition();
@@ -205,14 +216,14 @@ export const PracticeCoach = ({ user }: { user: any }) => {
       };
 
       recognition.onerror = (e: any) => {
-        console.error('[Local Speech] Error:', e.error);
-        setError(`Local Recognition Error: ${e.error}`);
+        console.error('[Local Speech] Recognition error:', e.error);
+        if (e.error !== 'aborted') setError(`Coaching error: ${e.error}`);
       };
       
       recognition.start();
       recognitionRef.current = recognition;
     } catch (err) {
-      setError("Mic access denied.");
+      setError("Microphone access denied.");
       setIsRecording(false);
     }
   };
@@ -266,17 +277,15 @@ export const PracticeCoach = ({ user }: { user: any }) => {
       const lower = word.toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"");
       
       if (isFiller) {
-        const category = fillerWordMap[lower] || 'um'; // Default category
+        const category = fillerWordMap[lower] || 'um'; 
         newFillerCounts[category] = (newFillerCounts[category] || 0) + 1;
       } else if (lower.length > 3) {
-        // Frequency check for non-filler words
         wordFrequencyRef.current[lower] = (wordFrequencyRef.current[lower] || 0) + 1;
       }
     });
 
     setFillerCount(newFillerCounts);
 
-    // After 1 minute, flag repetitive non-filler words
     if (elapsedTime > 60) {
       const repetitive = (Object.entries(wordFrequencyRef.current) as [string, number][])
         .filter(([_, count]) => count > 3)
@@ -296,13 +305,26 @@ export const PracticeCoach = ({ user }: { user: any }) => {
   }, [isRecording, activeTab]);
 
   const cleanup = (fullCleanup = true) => {
-    if (fullCleanup && timerRef.current) clearInterval(timerRef.current);
-    if (volumeIntervalRef.current) clearInterval(volumeIntervalRef.current);
-    if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
+    if (fullCleanup && timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (volumeIntervalRef.current) {
+      clearInterval(volumeIntervalRef.current);
+      volumeIntervalRef.current = null;
+    }
+    if (keepAliveIntervalRef.current) {
+      clearInterval(keepAliveIntervalRef.current);
+      keepAliveIntervalRef.current = null;
+    }
     
-    // Safety narrowed checks for refs
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try { mediaRecorderRef.current.stop(); } catch (e) {}
+    }
+    
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
     
     if (socketRef.current) {
@@ -312,6 +334,7 @@ export const PracticeCoach = ({ user }: { user: any }) => {
     
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (e) {}
+      recognitionRef.current = null;
     }
 
     const ctx = audioContextRef.current;
