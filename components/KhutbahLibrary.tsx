@@ -89,9 +89,12 @@ interface KhutbahCardProps {
   onBookmark?: (e: React.MouseEvent, id: string) => void;
   onLike?: (e: React.MouseEvent, id: string) => void;
   isBookmarked?: boolean;
+  isLiked?: boolean;
 }
 
-const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick, onTagClick, onCommentClick, onBookmark, onLike, isBookmarked }) => {
+const KhutbahCard: React.FC<KhutbahCardProps> = ({ 
+  data, onClick, onAuthorClick, onTagClick, onCommentClick, onBookmark, onLike, isBookmarked, isLiked 
+}) => {
   const handleAuthorClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onAuthorClick) {
@@ -181,9 +184,9 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
          <div className="flex items-center gap-4">
              <button 
                 onClick={handleLikeClick}
-                className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-red-500 transition-all active:scale-125"
+                className={`flex items-center gap-1.5 text-xs font-medium transition-all active:scale-125 ${isLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
              >
-                 <Heart size={14} className="text-gray-400 group-hover:text-red-500 transition-colors" /> 
+                 <Heart size={14} className={isLiked ? 'text-red-500 fill-red-500' : 'text-gray-400 group-hover:text-red-500 transition-colors'} /> 
                  {data.likes}
              </button>
              <button 
@@ -347,13 +350,15 @@ const TopicPageView = ({
   onBack,
   onSelectKhutbah,
   onSelectImam,
-  onTagClick
+  onTagClick,
+  userLikes
 }: { 
   slug: string; 
   onBack: () => void;
   onSelectKhutbah: (k: KhutbahPreview, options?: { scrollToComments?: boolean }) => void;
   onSelectImam: (slug: string) => void;
   onTagClick: (slug: string) => void;
+  userLikes: Set<string>;
 }) => {
   const [tagInfo, setTagInfo] = useState<any>(null);
   const [allKhutbahs, setAllKhutbahs] = useState<KhutbahPreview[]>([]);
@@ -477,6 +482,7 @@ const TopicPageView = ({
               onCommentClick={(e, data) => onSelectKhutbah(data, { scrollToComments: true })}
               onAuthorClick={() => handleAuthorClick(k.author)}
               onTagClick={onTagClick}
+              isLiked={userLikes.has(k.id)}
             />
           ))}
         </div>
@@ -650,13 +656,15 @@ const ImamProfileView = ({
   onBack,
   onSelectKhutbah,
   onNavigateDetails,
-  onTagClick
+  onTagClick,
+  userLikes
 }: { 
   slug: string; 
   onBack: () => void; 
   onSelectKhutbah: (k: KhutbahPreview, options?: { scrollToComments?: boolean }) => void;
   onNavigateDetails: (imam: Imam) => void;
   onTagClick: (slug: string) => void;
+  userLikes: Set<string>;
 }) => {
   const [imam, setImam] = useState<Imam | null>(null);
   const [sermons, setSermons] = useState<any[]>([]);
@@ -826,6 +834,7 @@ const ImamProfileView = ({
                 onCommentClick={(e, data) => onSelectKhutbah({ id: s.id } as any, { scrollToComments: true })}
                 onAuthorClick={() => handleAuthorClick(imam.name)}
                 onTagClick={onTagClick}
+                isLiked={userLikes.has(s.id)}
               />
             ))}
           </div>
@@ -850,6 +859,7 @@ interface HomeViewProps {
     onBookmark: (e: React.MouseEvent, id: string) => void;
     onLike: (e: React.MouseEvent, id: string) => void;
     userBookmarks: Set<string>;
+    userLikes: Set<string>;
 }
 
 const HomeView: React.FC<HomeViewProps> = ({ 
@@ -861,7 +871,8 @@ const HomeView: React.FC<HomeViewProps> = ({
     onTagClick,
     onBookmark,
     onLike,
-    userBookmarks
+    userBookmarks,
+    userLikes
 }) => {
     const handleAuthorClick = (authorName: string) => {
         onNavigate('list', { imam: authorName });
@@ -897,6 +908,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                             onBookmark={onBookmark}
                             onLike={onLike}
                             isBookmarked={userBookmarks.has(k.id)}
+                            isLiked={userLikes.has(k.id)}
                         />
                     ))}
                 </div>
@@ -922,6 +934,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                             onBookmark={onBookmark}
                             onLike={onLike}
                             isBookmarked={userBookmarks.has(k.id)}
+                            isLiked={userLikes.has(k.id)}
                         />
                     ))}
                 </div>
@@ -991,6 +1004,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                                 onBookmark={onBookmark}
                                 onLike={onLike}
                                 isBookmarked={userBookmarks.has(k.id)}
+                                isLiked={userLikes.has(k.id)}
                             />
                         </div>
                     ))}
@@ -1015,6 +1029,7 @@ interface ListViewProps {
     onBookmark: (e: React.MouseEvent, id: string) => void;
     onLike: (e: React.MouseEvent, id: string) => void;
     userBookmarks: Set<string>;
+    userLikes: Set<string>;
 }
 
 const ListView: React.FC<ListViewProps> = ({ 
@@ -1031,7 +1046,8 @@ const ListView: React.FC<ListViewProps> = ({
     onTagClick,
     onBookmark,
     onLike,
-    userBookmarks
+    userBookmarks,
+    userLikes
 }) => {
     const lastElementRef = useInfiniteScroll(loadMore, hasMore, isLoading);
 
@@ -1084,6 +1100,7 @@ const ListView: React.FC<ListViewProps> = ({
                             onBookmark={onBookmark}
                             onLike={onLike}
                             isBookmarked={userBookmarks.has(k.id)}
+                            isLiked={userLikes.has(k.id)}
                         />
                     </div>
                 ))}
@@ -1119,6 +1136,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const [contentFontSize, setContentFontSize] = useState(18);
   const [isInMyKhutbahs, setIsInMyKhutbahs] = useState(false);
   const [userBookmarks, setUserBookmarks] = useState<Set<string>>(new Set());
+  const [userLikes, setUserLikes] = useState<Set<string>>(new Set());
   const [addingToMyKhutbahs, setAddingToMyKhutbahs] = useState(false);
   const [khutbahCards, setKhutbahCards] = useState<any[]>([]);
   
@@ -1135,15 +1153,21 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const { data: homeData, setData: setHomeData, isLoading: homeLoading, refresh: refreshHome } = useHomepageData();
   const { data: listData, setData: setListData, count, hasMore, isLoading: listLoading, loadMore, refresh: refreshList } = usePaginatedKhutbahs(activeFilters);
 
-  // Fetch initial bookmarks for user
+  // Fetch initial bookmarks and likes for user
   useEffect(() => {
-    const fetchBookmarks = async () => {
+    const fetchUserData = async () => {
         const currentUser = authUser || user;
         if (!currentUser) return;
-        const { data } = await supabase.from('user_bookmarks').select('source_khutbah_id').eq('user_id', currentUser.id);
-        if (data) setUserBookmarks(new Set(data.map(b => b.source_khutbah_id)));
+
+        // Fetch Bookmarks
+        const { data: bData } = await supabase.from('user_bookmarks').select('source_khutbah_id').eq('user_id', currentUser.id);
+        if (bData) setUserBookmarks(new Set(bData.map(b => b.source_khutbah_id)));
+
+        // Fetch Likes (assuming a khutbah_likes table exists)
+        const { data: lData } = await supabase.from('khutbah_likes').select('khutbah_id').eq('user_id', currentUser.id);
+        if (lData) setUserLikes(new Set(lData.map(l => l.khutbah_id)));
     };
-    fetchBookmarks();
+    fetchUserData();
   }, [authUser, user]);
 
   // Handle auto-scroll when detail view loads
@@ -1185,40 +1209,55 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     }
   };
 
-  const handleLike = async (khutbahId: string, e?: React.MouseEvent) => {
+  const handleToggleLike = async (khutbahId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    const currentUser = authUser || user;
-    if (!currentUser) {
-        requireAuth('Sign in to like this sermon.', () => {});
-        return;
-    }
+    requireAuth('Sign in to like this sermon.', async () => {
+        const currentUser = authUser || user;
+        if (!currentUser) return;
 
-    try {
-        // DB Update
-        await supabase.rpc('increment_khutbah_likes', { row_id: khutbahId });
-        
-        // IMMEDIATE STATE SYNC: Update local state arrays for instant UI feedback
-        const syncLikes = (k: KhutbahPreview) => 
-            k.id === khutbahId ? { ...k, likes: (k.likes || 0) + 1 } : k;
-
-        if (homeData) {
-            setHomeData({
-                ...homeData,
-                latest: homeData.latest.map(syncLikes),
-                trending: homeData.trending.map(syncLikes),
-                classics: homeData.classics.map(syncLikes),
-                featured: homeData.featured.map(syncLikes)
+        try {
+            // Optimistically update visual UI state first
+            const currentlyLiked = userLikes.has(khutbahId);
+            
+            // DB Update via RPC
+            const { data: newCount, error } = await supabase.rpc('toggle_khutbah_like', { 
+                k_id: khutbahId, 
+                u_id: currentUser.id 
             });
-        }
-        setListData(prev => prev.map(syncLikes));
 
-        // Detail View Sync
-        if (detailData && detailData.id === khutbahId) {
-            setDetailData({ ...detailData, likes: (detailData.likes || 0) + 1 });
+            if (error) throw error;
+
+            // Sync UserLikes set
+            setUserLikes(prev => {
+                const next = new Set(prev);
+                if (next.has(khutbahId)) next.delete(khutbahId);
+                else next.add(khutbahId);
+                return next;
+            });
+
+            // Sync counts across all local state arrays
+            const syncLikes = (k: KhutbahPreview) => 
+                k.id === khutbahId ? { ...k, likes: newCount } : k;
+
+            if (homeData) {
+                setHomeData({
+                    ...homeData,
+                    latest: homeData.latest.map(syncLikes),
+                    trending: homeData.trending.map(syncLikes),
+                    classics: homeData.classics.map(syncLikes),
+                    featured: homeData.featured.map(syncLikes)
+                });
+            }
+            setListData(prev => prev.map(syncLikes));
+
+            // Detail View Sync
+            if (detailData && detailData.id === khutbahId) {
+                setDetailData(prev => prev ? { ...prev, likes: newCount } : null);
+            }
+        } catch (err) {
+            console.error("Toggle like error:", err);
         }
-    } catch (err) {
-        console.error("Like error:", err);
-    }
+    });
   };
 
   const handleBookmark = async (e: React.MouseEvent | null, khutbahId: string) => {
@@ -1476,6 +1515,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                       onSelectKhutbah={handleSelectKhutbah}
                       onSelectImam={handleSelectImam}
                       onTagClick={handleSelectTopic}
+                      userLikes={userLikes}
                    />
                 </div>
             </div>
@@ -1509,6 +1549,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                       onSelectKhutbah={handleSelectKhutbah}
                       onNavigateDetails={handleNavigateImamDetails}
                       onTagClick={handleSelectTopic}
+                      userLikes={userLikes}
                    />
                 </div>
             </div>
@@ -1520,6 +1561,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       if (detailLoading || !detailData) return <div className="h-screen flex items-center justify-center"><Loader2 size={48} className="animate-spin text-emerald-600"/></div>;
       
       const isCurrentlyBookmarked = userBookmarks.has(detailData.id);
+      const isCurrentlyLiked = userLikes.has(detailData.id);
 
       return (
         <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
@@ -1582,10 +1624,10 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                       </button>
 
                       <button 
-                        onClick={() => handleLike(detailData.id)}
-                        className="flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border border-gray-200 bg-white text-gray-700 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 shadow-sm"
+                        onClick={(e) => handleToggleLike(detailData.id, e)}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyLiked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}
                       >
-                        <Heart size={20} />
+                        <Heart size={20} fill={isCurrentlyLiked ? "currentColor" : "none"} />
                         {detailData.likes || 0} Likes
                       </button>
                   </div>
@@ -1722,7 +1764,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
           )}
         </div>
 
-        {view === 'home' && <HomeView data={homeData} isLoading={homeLoading} onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} />}
+        {view === 'home' && <HomeView data={homeData} isLoading={homeLoading} onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleToggleLike} userBookmarks={userBookmarks} userLikes={userLikes} />}
         {view === 'list' && (
             <ListView 
                 data={listData}
@@ -1737,8 +1779,9 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                 onSelectImam={handleSelectImam}
                 onTagClick={handleSelectTopic}
                 onBookmark={handleBookmark}
-                onLike={handleLike}
+                onLike={handleToggleLike}
                 userBookmarks={userBookmarks}
+                userLikes={userLikes}
             />
         )}
       </div>
