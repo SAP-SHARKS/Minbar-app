@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { KhutbahPreview, Topic, Imam } from './types';
@@ -98,7 +99,8 @@ export function useHomepageData() {
     fetchData();
   }, [fetchData]);
 
-  return { data, isLoading, refresh: fetchData };
+  // Added setData to the return object to fix the "Property 'setData' does not exist" error in KhutbahLibrary.tsx
+  return { data, isLoading, refresh: fetchData, setData };
 }
 
 const PAGE_SIZE = 20;

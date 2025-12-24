@@ -341,13 +341,17 @@ const TopicPageView = ({
   onBack,
   onSelectKhutbah,
   onSelectImam,
-  onTagClick
+  onTagClick,
+  onLike,
+  userLikes
 }: { 
   slug: string; 
   onBack: () => void;
   onSelectKhutbah: (k: KhutbahPreview) => void;
   onSelectImam: (slug: string) => void;
   onTagClick: (slug: string) => void;
+  onLike?: (e: React.MouseEvent, id: string) => void;
+  userLikes?: Set<string>;
 }) => {
   const [tagInfo, setTagInfo] = useState<any>(null);
   const [allKhutbahs, setAllKhutbahs] = useState<KhutbahPreview[]>([]);
@@ -407,7 +411,7 @@ const TopicPageView = ({
       <h1 className="text-5xl md:text-6xl font-serif font-bold text-gray-900 mb-12"><span className="text-emerald-600">Topic:</span> {tagInfo?.name}</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {filteredKhutbahs.map(k => (
-          <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onAuthorClick={() => handleAuthorClick(k.author)} onTagClick={onTagClick} />
+          <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onAuthorClick={() => handleAuthorClick(k.author)} onTagClick={onTagClick} onLike={onLike} isLiked={userLikes?.has(k.id)} />
         ))}
       </div>
     </div>
@@ -452,13 +456,17 @@ const ImamProfileView = ({
   onBack,
   onSelectKhutbah,
   onNavigateDetails,
-  onTagClick
+  onTagClick,
+  onLike,
+  userLikes
 }: { 
   slug: string; 
   onBack: () => void; 
   onSelectKhutbah: (k: KhutbahPreview) => void;
   onNavigateDetails: (imam: Imam) => void;
   onTagClick: (slug: string) => void;
+  onLike?: (e: React.MouseEvent, id: string) => void;
+  userLikes?: Set<string>;
 }) => {
   const [imam, setImam] = useState<Imam | null>(null);
   const [sermons, setSermons] = useState<any[]>([]);
@@ -513,6 +521,8 @@ const ImamProfileView = ({
             onClick={() => onSelectKhutbah({ id: s.id } as any)} 
             onAuthorClick={() => handleAuthorClick(imam.name)}
             onTagClick={onTagClick}
+            onLike={onLike}
+            isLiked={userLikes?.has(s.id)}
           />
         ))}
       </div>
@@ -530,6 +540,7 @@ interface HomeViewProps {
     onBookmark: (e: React.MouseEvent, id: string) => void;
     onLike: (e: React.MouseEvent, id: string) => void;
     userBookmarks: Set<string>;
+    userLikes: Set<string>;
 }
 
 const HomeView: React.FC<HomeViewProps> = ({ 
@@ -541,7 +552,8 @@ const HomeView: React.FC<HomeViewProps> = ({
     onTagClick,
     onBookmark,
     onLike,
-    userBookmarks
+    userBookmarks,
+    userLikes
 }) => {
     const handleAuthorClick = (authorName: string) => {
         onNavigate('list', { imam: authorName });
@@ -572,6 +584,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                             onAuthorClick={handleAuthorClick} onTagClick={onTagClick} 
                             onBookmark={onBookmark} onLike={onLike}
                             isBookmarked={userBookmarks.has(k.id)}
+                            isLiked={userLikes.has(k.id)}
                         />
                     ))}
                 </div>
@@ -592,6 +605,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                             onAuthorClick={handleAuthorClick} onTagClick={onTagClick} 
                             onBookmark={onBookmark} onLike={onLike}
                             isBookmarked={userBookmarks.has(k.id)}
+                            isLiked={userLikes.has(k.id)}
                         />
                     ))}
                 </div>
@@ -647,6 +661,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                                 onAuthorClick={handleAuthorClick} onTagClick={onTagClick} 
                                 onBookmark={onBookmark} onLike={onLike}
                                 isBookmarked={userBookmarks.has(k.id)}
+                                isLiked={userLikes.has(k.id)}
                             />
                         </div>
                     ))}
@@ -671,12 +686,13 @@ interface ListViewProps {
     onBookmark: (e: React.MouseEvent, id: string) => void;
     onLike: (e: React.MouseEvent, id: string) => void;
     userBookmarks: Set<string>;
+    userLikes: Set<string>;
 }
 
 const ListView: React.FC<ListViewProps> = ({ 
     data, count, hasMore, isLoading, loadMore, filters, 
     setFilters, onSelectKhutbah, onBack, onSelectImam, 
-    onTagClick, onBookmark, onLike, userBookmarks
+    onTagClick, onBookmark, onLike, userBookmarks, userLikes
 }) => {
     const lastElementRef = useInfiniteScroll(loadMore, hasMore, isLoading);
     const handleAuthorClick = (authorName: string) => { setFilters({ ...filters, imam: authorName }); };
@@ -691,7 +707,7 @@ const ListView: React.FC<ListViewProps> = ({
                 <div className="flex gap-3 items-center">
                     <div className="relative w-full sm:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                        <input type="text" placeholder="Refine search..." value={filters.search || ''} onChange={(e) => setFilters({...filters, search: e.target.value})} className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm shadow-sm transition-all" />
+                        <input type="text" placeholder="Refine search..." value={filters.search || ''} onChange={(e) => setFilters({...filters, search: e.target.value})} className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm shadow-sm transition-all" />
                     </div>
                     <select value={filters.sort || 'latest'} onChange={(e) => setFilters({...filters, sort: e.target.value})} className="px-4 py-2 bg-white border border-gray-200 rounded-xl outline-none text-sm font-medium shadow-sm"><option value="latest">Latest</option><option value="trending">Trending</option></select>
                 </div>
@@ -699,7 +715,7 @@ const ListView: React.FC<ListViewProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
                 {data.map((k, index) => (
                     <div key={k.id} ref={index === data.length - 1 ? lastElementRef : null}>
-                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onAuthorClick={handleAuthorClick} onTagClick={onTagClick} onBookmark={onBookmark} onLike={onLike} isBookmarked={userBookmarks.has(k.id)} />
+                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onAuthorClick={handleAuthorClick} onTagClick={onTagClick} onBookmark={onBookmark} onLike={onLike} isBookmarked={userBookmarks.has(k.id)} isLiked={userLikes.has(k.id)} />
                     </div>
                 ))}
             </div>
@@ -722,6 +738,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const [contentFontSize, setContentFontSize] = useState(18);
   const [isInMyKhutbahs, setIsInMyKhutbahs] = useState(false);
   const [userBookmarks, setUserBookmarks] = useState<Set<string>>(new Set());
+  const [userLikes, setUserLikes] = useState<Set<string>>(new Set());
   const [addingToMyKhutbahs, setAddingToMyKhutbahs] = useState(false);
   const [khutbahCards, setKhutbahCards] = useState<any[]>([]);
   
@@ -731,17 +748,21 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   
   const { user: authUser, requireAuth } = useAuth(); 
 
-  const { data: homeData, isLoading: homeLoading, refresh: refreshHome } = useHomepageData();
+  const { data: homeData, isLoading: homeLoading, setData: setHomeData, refresh: refreshHome } = useHomepageData();
   const { data: listData, count, hasMore, isLoading: listLoading, loadMore, refresh: refreshList, setData: setListData } = usePaginatedKhutbahs(activeFilters);
 
   useEffect(() => {
-    const fetchBookmarks = async () => {
+    const fetchUserInteractions = async () => {
         const currentUser = authUser || user;
         if (!currentUser) return;
-        const { data } = await supabase.from('user_bookmarks').select('source_khutbah_id').eq('user_id', currentUser.id);
-        if (data) setUserBookmarks(new Set(data.map(b => b.source_khutbah_id)));
+        const [bookmarksRes, likesRes] = await Promise.all([
+          supabase.from('user_bookmarks').select('source_khutbah_id').eq('user_id', currentUser.id),
+          supabase.from('khutbah_likes').select('khutbah_id').eq('user_id', currentUser.id)
+        ]);
+        if (bookmarksRes.data) setUserBookmarks(new Set(bookmarksRes.data.map(b => b.source_khutbah_id)));
+        if (likesRes.data) setUserLikes(new Set(likesRes.data.map(l => l.khutbah_id)));
     };
-    fetchBookmarks();
+    fetchUserInteractions();
   }, [authUser, user]);
 
   const handleNavigate = (newView: any, filters: any = {}) => {
@@ -768,27 +789,48 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     }
 
     try {
-        // Call the correct toggle function with correct parameter names
         const { data, error } = await supabase.rpc('toggle_khutbah_like', { 
             k_id: khutbahId,
             u_id: currentUser.id 
         });
-        
-        if (error) throw error;
-        
-        // Update local state with new count from database
+
+        if (error) {
+            console.error("Toggle like error:", error);
+            throw error;
+        }
+
+        console.log("Like toggle response:", data);
+
+        // Update local detail state if viewing this khutbah
         if (data && data.length > 0) {
             const { new_count, is_liked } = data[0];
-            
-            // Update detail view if currently viewing this khutbah
+            console.log(`Like ${is_liked ? 'added' : 'removed'}, new count: ${new_count}`);
+
+            // Update userLikes set so the heart toggles filled/outline
+            setUserLikes(prev => {
+                const next = new Set(prev);
+                if (is_liked) next.add(khutbahId);
+                else next.delete(khutbahId);
+                return next;
+            });
+
+            // Update detail view count
             if (detailData && detailData.id === khutbahId) {
-                setDetailData({ 
-                    ...detailData, 
-                    likes: new_count 
-                });
+                setDetailData({ ...detailData, likes: new_count });
             }
             
-            console.log(`Like toggled: ${is_liked ? 'liked' : 'unliked'}, new count: ${new_count}`);
+            // Sync counts across other views (Home and List)
+            const syncCount = (k: any) => k.id === khutbahId ? { ...k, likes: new_count } : k;
+            if (homeData) {
+                setHomeData({
+                    ...homeData,
+                    latest: homeData.latest.map(syncCount),
+                    trending: homeData.trending.map(syncCount),
+                    classics: homeData.classics.map(syncCount),
+                    featured: homeData.featured.map(syncCount)
+                });
+            }
+            setListData(prev => prev.map(syncCount));
         }
     } catch (err) {
         console.error("Like error:", err);
@@ -830,9 +872,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   };
 
   const handleSelectKhutbah = async (preview: KhutbahPreview) => {
-      // ✅ Trigger view increment immediately - CORRECT
       await incrementViews(preview.id);
-      
       setSelectedKhutbahId(preview.id);
       setView('detail');
       setDetailLoading(true);
@@ -876,13 +916,14 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   };
 
   if (view === 'imams-list') { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <ImamsListView onBack={() => setView('home')} onSelectImam={handleSelectImam} /> </div> </div> </div> ); }
-  if (view === 'topic-page' && selectedTopicSlug) { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <TopicPageView slug={selectedTopicSlug} onBack={() => setView('home')} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} /> </div> </div> </div> ); }
+  if (view === 'topic-page' && selectedTopicSlug) { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <TopicPageView slug={selectedTopicSlug} onBack={() => setView('home')} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onLike={handleLike} userLikes={userLikes} /> </div> </div> </div> ); }
   if (view === 'imam-details' && activeImam) { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <ImamDetailedView imam={activeImam} onBack={() => setView('imam-profile')} /> </div> </div> </div> ); }
-  if (view === 'imam-profile' && selectedImamSlug) { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <ImamProfileView slug={selectedImamSlug} onBack={() => setView('home')} onSelectKhutbah={handleSelectKhutbah} onNavigateDetails={handleNavigateImamDetails} onTagClick={handleSelectTopic} /> </div> </div> </div> ); }
+  if (view === 'imam-profile' && selectedImamSlug) { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <ImamProfileView slug={selectedImamSlug} onBack={() => setView('home')} onSelectKhutbah={handleSelectKhutbah} onNavigateDetails={handleNavigateImamDetails} onTagClick={handleSelectTopic} onLike={handleLike} userLikes={userLikes} /> </div> </div> </div> ); }
 
   if (view === 'detail') {
       if (detailLoading || !detailData) return <div className="h-screen flex items-center justify-center"><Loader2 size={48} className="animate-spin text-emerald-600"/></div>;
       const isCurrentlyBookmarked = userBookmarks.has(detailData.id);
+      const isCurrentlyLiked = userLikes.has(detailData.id);
       return (
         <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
             <div className="flex-1 overflow-y-auto">
@@ -908,8 +949,8 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                           <button onClick={() => setContentFontSize(s => Math.min(40, s+2))} className="p-1 hover:bg-gray-100 rounded-full"><Plus size={16}/></button>
                       </div>
                       {isInMyKhutbahs ? ( <div className="flex items-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-200 px-6 py-3 rounded-full font-bold shadow-sm"> <Check size={20} /> In My Khutbahs </div> ) : ( <button onClick={handleAddCopy} disabled={addingToMyKhutbahs} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-full hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 font-bold disabled:opacity-50" > {addingToMyKhutbahs ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} Add to My Khutbahs </button> )}
-                      <button onClick={() => handleBookmark(null, detailData.id)} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyBookmarked ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}><BookmarkIcon size={20} fill={isCurrentlyBookmarked ? "currentColor" : "none"} />{isCurrentlyBookmarked ? 'Bookmarked' : 'Bookmark'}</button>
-                      <button onClick={(e) => handleLike(e, detailData.id)} className="flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border border-gray-200 bg-white text-gray-700 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 shadow-sm"><Heart size={20} />{detailData.likes || 0} Likes</button>
+                      <button onClick={(e) => handleBookmark(e, detailData.id)} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyBookmarked ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}><BookmarkIcon size={20} fill={isCurrentlyBookmarked ? "currentColor" : "none"} />{isCurrentlyBookmarked ? 'Bookmarked' : 'Bookmark'}</button>
+                      <button onClick={(e) => handleLike(e, detailData.id)} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyLiked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}><Heart size={20} fill={isCurrentlyLiked ? "currentColor" : "none"} />{detailData.likes || 0} Likes</button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-20">
@@ -952,8 +993,8 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
              </div>
           )}
         </div>
-        {view === 'home' && <HomeView data={homeData} isLoading={homeLoading} onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} />}
-        {view === 'list' && ( <ListView data={listData} count={count} hasMore={hasMore} isLoading={listLoading} loadMore={loadMore} filters={activeFilters} setFilters={setActiveFilters} onSelectKhutbah={handleSelectKhutbah} onBack={() => setView('home')} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} /> )}
+        {view === 'home' && <HomeView data={homeData} isLoading={homeLoading} onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} userLikes={userLikes} />}
+        {view === 'list' && ( <ListView data={listData} count={count} hasMore={hasMore} isLoading={listLoading} loadMore={loadMore} filters={activeFilters} setFilters={setActiveFilters} onSelectKhutbah={handleSelectKhutbah} onBack={() => setView('home')} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} userLikes={userLikes} /> )}
       </div>
     </div>
   );
