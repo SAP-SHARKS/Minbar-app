@@ -4,7 +4,8 @@ import {
   MapPin, Star, Heart, MessageCircle, Send, Loader2, AlertCircle,
   Minus, Plus, Type, ChevronRight, TrendingUp, Grid, User,
   BookOpen, Moon, Sun, Users, Activity, Bookmark, LayoutList, Sparkles,
-  Calendar, Shield, CheckCircle, ArrowLeft, Filter, ArrowRight, Bookmark as BookmarkIcon
+  Calendar, Shield, CheckCircle, ArrowLeft, Filter, ArrowRight, Bookmark as BookmarkIcon,
+  Eye
 } from 'lucide-react';
 import { AUTHORS_DATA } from '../constants';
 import { Khutbah, KhutbahPreview, AuthorData, Imam, Topic } from '../types';
@@ -84,9 +85,12 @@ interface KhutbahCardProps {
   onClick: () => void;
   onAuthorClick?: (authorName: string) => void;
   onTagClick?: (slug: string) => void;
+  onBookmark?: (e: React.MouseEvent, id: string) => void;
+  onLike?: (e: React.MouseEvent, id: string) => void;
+  isBookmarked?: boolean;
 }
 
-const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick, onTagClick }) => {
+const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick, onTagClick, onBookmark, onLike, isBookmarked }) => {
   const handleAuthorClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onAuthorClick) {
@@ -99,13 +103,21 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
   return (
     <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 h-full flex flex-col relative overflow-hidden">
       
+      {/* Top Left Bookmark */}
+      <button 
+        onClick={(e) => onBookmark?.(e, data.id)}
+        className={`absolute top-4 left-4 z-10 p-2 rounded-full transition-all ${isBookmarked ? 'bg-amber-100 text-amber-600 shadow-sm' : 'bg-gray-50/50 text-gray-400 hover:text-amber-500 hover:bg-white'}`}
+      >
+        <BookmarkIcon size={18} fill={isBookmarked ? "currentColor" : "none"} />
+      </button>
+
       <div className="absolute top-6 right-6">
           <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded text-xs font-bold border border-amber-100">
               <Star size={12} fill="currentColor" /> {data.rating || '4.8'}
           </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4 pr-16">
+      <div className="flex flex-wrap gap-2 mb-4 mt-6 pr-16">
         {data.labels && data.labels.slice(0, 3).map((label, idx) => (
             <span 
               key={idx} 
@@ -147,13 +159,20 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
       
       <div className="pt-5 border-t border-gray-50 mt-5 flex items-center justify-between">
          <div className="flex items-center gap-4">
-             <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-red-500 transition-colors">
+             <button 
+                onClick={(e) => onLike?.(e, data.id)}
+                className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-red-500 transition-colors"
+             >
                  <Heart size={14} className="text-gray-400 group-hover:text-red-500 transition-colors" /> 
                  {data.likes}
-             </span>
+             </button>
              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-500 transition-colors">
                  <MessageCircle size={14} className="text-gray-400 group-hover:text-blue-500 transition-colors" /> 
                  {data.comments_count || 0}
+             </span>
+             <span className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
+                 <Eye size={14} /> 
+                 {data.view_count || 0}
              </span>
          </div>
          <span className="text-xs text-gray-400">{data.published_at ? new Date(data.published_at).toLocaleDateString() : 'Recently'}</span>
@@ -345,7 +364,7 @@ const TopicPageView = ({
         const { data: khutbahData, error: khutbahError } = await supabase
           .from('khutbahs')
           .select(`
-            id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+            id, title, author, topic, tags, likes_count, comments_count, view_count, created_at, rating,
             imams ( slug ),
             khutbah_tags!inner ( tag_id )
           `)
@@ -362,6 +381,7 @@ const TopicPageView = ({
             labels: item.tags,
             likes: item.likes_count,
             comments_count: item.comments_count,
+            view_count: item.view_count,
             published_at: item.created_at,
             rating: typeof item.rating === 'number' ? item.rating : parseFloat(item.rating || '4.8'),
             imam_slug: item.imams?.slug
@@ -638,7 +658,7 @@ const ImamProfileView = ({
         const { data: sermonData, error: sermonError } = await supabase
           .from('khutbahs')
           .select(`
-             id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+             id, title, author, topic, tags, likes_count, comments_count, view_count, created_at, rating,
              imams ( slug )
           `)
           .eq('imam_id', imamData.id)
@@ -647,7 +667,6 @@ const ImamProfileView = ({
         if (sermonError) throw sermonError;
         setSermons(sermonData || []);
 
-        // Use real-time count from khutbahs table
         const { count, error: countError } = await supabase
           .from('khutbahs')
           .select('*', { count: 'exact', head: true })
@@ -774,6 +793,7 @@ const ImamProfileView = ({
                   likes: s.likes_count || 0,
                   topic: s.topic,
                   labels: s.tags,
+                  view_count: s.view_count || 0,
                   published_at: s.created_at,
                   rating: s.rating,
                   imam_slug: s.imams?.slug
@@ -799,12 +819,18 @@ const HomeView = ({
     onNavigate, 
     onSelectKhutbah,
     onSelectImam,
-    onTagClick
+    onTagClick,
+    onBookmark,
+    onLike,
+    userBookmarks
 }: { 
     onNavigate: (view: any, filter?: any) => void; 
     onSelectKhutbah: (k: KhutbahPreview) => void;
     onSelectImam: (slug: string) => void;
     onTagClick: (slug: string) => void;
+    onBookmark: (e: React.MouseEvent, id: string) => void;
+    onLike: (e: React.MouseEvent, id: string) => void;
+    userBookmarks: Set<string>;
 }) => {
     const { data, isLoading } = useHomepageData();
 
@@ -838,6 +864,9 @@ const HomeView = ({
                             onClick={() => onSelectKhutbah(k)} 
                             onAuthorClick={handleAuthorClick}
                             onTagClick={onTagClick} 
+                            onBookmark={onBookmark}
+                            onLike={onLike}
+                            isBookmarked={userBookmarks.has(k.id)}
                         />
                     ))}
                 </div>
@@ -859,6 +888,9 @@ const HomeView = ({
                             onClick={() => onSelectKhutbah(k)} 
                             onAuthorClick={handleAuthorClick}
                             onTagClick={onTagClick} 
+                            onBookmark={onBookmark}
+                            onLike={onLike}
+                            isBookmarked={userBookmarks.has(k.id)}
                         />
                     ))}
                 </div>
@@ -924,6 +956,9 @@ const HomeView = ({
                                 onClick={() => onSelectKhutbah(k)} 
                                 onAuthorClick={handleAuthorClick}
                                 onTagClick={onTagClick} 
+                                onBookmark={onBookmark}
+                                onLike={onLike}
+                                isBookmarked={userBookmarks.has(k.id)}
                             />
                         </div>
                     ))}
@@ -939,14 +974,20 @@ const ListView = ({
     onSelectKhutbah,
     onBack,
     onSelectImam,
-    onTagClick
+    onTagClick,
+    onBookmark,
+    onLike,
+    userBookmarks
 }: { 
     filters: any, 
     setFilters: (f: any) => void, 
     onSelectKhutbah: (k: KhutbahPreview) => void,
     onBack: () => void,
     onSelectImam: (slug: string) => void,
-    onTagClick: (slug: string) => void
+    onTagClick: (slug: string) => void,
+    onBookmark: (e: React.MouseEvent, id: string) => void,
+    onLike: (e: React.MouseEvent, id: string) => void,
+    userBookmarks: Set<string>;
 }) => {
     const { data, count, hasMore, isLoading, loadMore, refresh } = usePaginatedKhutbahs(filters);
     const lastElementRef = useInfiniteScroll(loadMore, hasMore, isLoading);
@@ -1006,6 +1047,9 @@ const ListView = ({
                             onClick={() => onSelectKhutbah(k)} 
                             onAuthorClick={handleAuthorClick}
                             onTagClick={onTagClick} 
+                            onBookmark={onBookmark}
+                            onLike={onLike}
+                            isBookmarked={userBookmarks.has(k.id)}
                         />
                     </div>
                 ))}
@@ -1040,11 +1084,23 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const [detailLoading, setDetailLoading] = useState(false);
   const [contentFontSize, setContentFontSize] = useState(18);
   const [isInMyKhutbahs, setIsInMyKhutbahs] = useState(false);
-  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [userBookmarks, setUserBookmarks] = useState<Set<string>>(new Set());
   const [addingToMyKhutbahs, setAddingToMyKhutbahs] = useState(false);
   const [khutbahCards, setKhutbahCards] = useState<any[]>([]);
+  const [comments, setComments] = useState<any[]>([]);
   
   const { user: authUser, requireAuth } = useAuth(); 
+
+  // Fetch initial bookmarks for user
+  useEffect(() => {
+    const fetchBookmarks = async () => {
+        const currentUser = authUser || user;
+        if (!currentUser) return;
+        const { data } = await supabase.from('user_bookmarks').select('source_khutbah_id').eq('user_id', currentUser.id);
+        if (data) setUserBookmarks(new Set(data.map(b => b.source_khutbah_id)));
+    };
+    fetchBookmarks();
+  }, [authUser, user]);
 
   const handleNavigate = (newView: any, filters: any = {}) => {
       const sanitizedFilters = { ...filters };
@@ -1069,12 +1125,74 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     setView('imam-details');
   };
 
+  const incrementViews = async (khutbahId: string, currentViews: number) => {
+    try {
+        await supabase.from('khutbahs').update({ view_count: (currentViews || 0) + 1 }).eq('id', khutbahId);
+    } catch (err) {
+        console.error("View tracking error:", err);
+    }
+  };
+
+  const handleLike = async (e: React.MouseEvent | null, khutbahId: string) => {
+    e?.stopPropagation();
+    const currentUser = authUser || user;
+    if (!currentUser) {
+        requireAuth('Sign in to like this sermon.', () => {});
+        return;
+    }
+
+    try {
+        const { data: current } = await supabase.from('khutbahs').select('likes_count').eq('id', khutbahId).single();
+        const nextLikes = (current?.likes_count || 0) + 1;
+        await supabase.from('khutbahs').update({ likes_count: nextLikes }).eq('id', khutbahId);
+        
+        // Update local detail state if viewing this khutbah
+        if (detailData && detailData.id === khutbahId) {
+            setDetailData({ ...detailData, likes: nextLikes });
+        }
+    } catch (err) {
+        console.error("Like error:", err);
+    }
+  };
+
+  const handleBookmark = async (e: React.MouseEvent | null, khutbahId: string) => {
+    e?.stopPropagation();
+    const currentUser = authUser || user;
+    if (!currentUser) {
+        requireAuth('Sign in to bookmark this sermon.', () => {});
+        return;
+    }
+    
+    try {
+        if (userBookmarks.has(khutbahId)) {
+            await supabase.from('user_bookmarks')
+                .delete()
+                .eq('user_id', currentUser.id)
+                .eq('source_khutbah_id', khutbahId);
+            setUserBookmarks(prev => {
+                const next = new Set(prev);
+                next.delete(khutbahId);
+                return next;
+            });
+        } else {
+            await supabase.from('user_bookmarks')
+                .insert({ user_id: currentUser.id, source_khutbah_id: khutbahId });
+            setUserBookmarks(prev => {
+                const next = new Set(prev);
+                next.add(khutbahId);
+                return next;
+            });
+        }
+    } catch (err) {
+        console.error("Bookmark error:", err);
+    }
+  };
+
   const handleSelectKhutbah = async (preview: KhutbahPreview) => {
       setSelectedKhutbahId(preview.id);
       setView('detail');
       setDetailLoading(true);
       setIsInMyKhutbahs(false);
-      setIsBookmarked(false);
       setKhutbahCards([]);
       
       try {
@@ -1092,12 +1210,16 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   topic: data.topic,
                   labels: data.tags,
                   likes: data.likes_count,
+                  view_count: data.view_count,
                   content: data.extracted_text || data.content,
                   style: data.topic,
                   date: data.created_at ? new Date(data.created_at).toLocaleDateString() : undefined,
                   file_url: data.file_url,
                   comments: [] 
               });
+
+              // Trigger view increment
+              incrementViews(data.id, data.view_count || 0);
 
               const { data: cardsData } = await supabase
                   .from('khutbah_cards')
@@ -1106,6 +1228,14 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   .order('card_number', { ascending: true });
 
               if (cardsData) setKhutbahCards(cardsData);
+
+              // Fetch comments
+              const { data: comms } = await supabase
+                .from('khutbah_comments')
+                .select('*')
+                .eq('khutbah_id', data.id)
+                .order('created_at', { ascending: false });
+              setComments(comms || []);
 
               const currentUser = authUser || user;
               if (currentUser) {
@@ -1118,16 +1248,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                     .maybeSingle();
                   
                   if (userData) setIsInMyKhutbahs(true);
-
-                  // Check if bookmarked
-                  const { data: bookmarkData } = await supabase
-                    .from('user_bookmarks')
-                    .select('id')
-                    .eq('user_id', currentUser.id)
-                    .eq('source_khutbah_id', data.id)
-                    .maybeSingle();
-                  
-                  if (bookmarkData) setIsBookmarked(true);
               }
           }
       } catch (err) {
@@ -1196,31 +1316,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
         alert(`Failed to add to My Khutbahs: ${err.message}`);
     } finally {
         setAddingToMyKhutbahs(false);
-    }
-  };
-
-  const handleBookmark = async () => {
-    const currentUser = authUser || user;
-    if (!currentUser) {
-        requireAuth('Sign in to bookmark this sermon.', () => {});
-        return;
-    }
-    if (!detailData) return;
-    
-    try {
-        if (isBookmarked) {
-            await supabase.from('user_bookmarks')
-                .delete()
-                .eq('user_id', currentUser.id)
-                .eq('source_khutbah_id', detailData.id);
-            setIsBookmarked(false);
-        } else {
-            await supabase.from('user_bookmarks')
-                .insert({ user_id: currentUser.id, source_khutbah_id: detailData.id });
-            setIsBookmarked(true);
-        }
-    } catch (err) {
-        console.error("Bookmark error:", err);
     }
   };
 
@@ -1293,6 +1388,8 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   if (view === 'detail') {
       if (detailLoading || !detailData) return <div className="h-screen flex items-center justify-center"><Loader2 size={48} className="animate-spin text-emerald-600"/></div>;
       
+      const isCurrentlyBookmarked = userBookmarks.has(detailData.id);
+
       return (
         <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
             <div className="flex-1 overflow-y-auto">
@@ -1317,6 +1414,8 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                         {detailData.topic}
                       </span>
                       {detailData.date && <><span>•</span><span>{detailData.date}</span></>}
+                      <span>•</span>
+                      <span className="flex items-center gap-1.5"><Eye size={18} className="text-gray-400" /> {detailData.view_count || 0} views</span>
                       </div>
                   </div>
                   
@@ -1344,24 +1443,64 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                       )}
 
                       <button 
-                        onClick={handleBookmark}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isBookmarked ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+                        onClick={() => handleBookmark(null, detailData.id)}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyBookmarked ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
                       >
-                        <BookmarkIcon size={20} fill={isBookmarked ? "currentColor" : "none"} />
-                        {isBookmarked ? 'Bookmarked' : 'Bookmark'}
+                        <BookmarkIcon size={20} fill={isCurrentlyBookmarked ? "currentColor" : "none"} />
+                        {isCurrentlyBookmarked ? 'Bookmarked' : 'Bookmark'}
+                      </button>
+
+                      <button 
+                        onClick={() => handleLike(null, detailData.id)}
+                        className="flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border border-gray-200 bg-white text-gray-700 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 shadow-sm"
+                      >
+                        <Heart size={20} />
+                        {detailData.likes || 0} Likes
                       </button>
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-20">
                     {/* Main Content */}
                     <div className="lg:col-span-2 min-w-0">
-                        <div className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-gray-100 w-full overflow-hidden min-h-[600px]">
+                        <div className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-gray-100 w-full overflow-hidden min-h-[600px] mb-8">
                             <div 
                                 className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed break-words font-serif"
                                 style={{ fontSize: `${contentFontSize}px` }}
                                 dangerouslySetInnerHTML={{ __html: detailData.content || '' }}
                             />
+                        </div>
+
+                        {/* Comments Section */}
+                        <div className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-gray-100 w-full">
+                           <h3 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-3">
+                              <MessageCircle size={24} className="text-blue-500" />
+                              Community Discussion ({comments.length})
+                           </h3>
+                           
+                           <div className="mb-10">
+                              <textarea 
+                                placeholder="Add a comment or ask a question..."
+                                className="w-full p-6 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all resize-none h-32"
+                              />
+                              <div className="flex justify-end mt-4">
+                                <button className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-md">Post Comment</button>
+                              </div>
+                           </div>
+
+                           <div className="space-y-6">
+                              {comments.length > 0 ? comments.map(c => (
+                                <div key={c.id} className="p-6 bg-gray-50/50 rounded-2xl border border-gray-50">
+                                   <div className="flex justify-between items-start mb-2">
+                                      <div className="font-bold text-gray-900">User_{c.id.substring(0,4)}</div>
+                                      <div className="text-xs text-gray-400">{new Date(c.created_at).toLocaleDateString()}</div>
+                                   </div>
+                                   <p className="text-gray-600 leading-relaxed">{c.comment_text}</p>
+                                </div>
+                              )) : (
+                                <div className="text-center py-10 text-gray-400 italic">No comments yet. Be the first to share your thoughts!</div>
+                              )}
+                           </div>
                         </div>
                     </div>
 
@@ -1446,7 +1585,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
           )}
         </div>
 
-        {view === 'home' && <HomeView onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} />}
+        {view === 'home' && <HomeView onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} />}
         {view === 'list' && (
             <ListView 
                 filters={activeFilters} 
@@ -1455,6 +1594,9 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                 onBack={() => setView('home')} 
                 onSelectImam={handleSelectImam}
                 onTagClick={handleSelectTopic}
+                onBookmark={handleBookmark}
+                onLike={handleLike}
+                userBookmarks={userBookmarks}
             />
         )}
       </div>
