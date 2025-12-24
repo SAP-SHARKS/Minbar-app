@@ -111,7 +111,7 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
                 e.stopPropagation();
                 if (onTagClick) onTagClick(label.toLowerCase().trim().replace(/\s+/g, '-'));
               }}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:bg-teal-100 transition-colors ${getTagStyles(label)}`}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:brightness-95 transition-all ${getTagStyles(label)}`}
             >
                 {label}
             </span>
@@ -122,7 +122,7 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
                 e.stopPropagation();
                 if (onTagClick) onTagClick(data.topic?.toLowerCase().trim().replace(/\s+/g, '-') || '');
               }}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:bg-teal-100 transition-colors ${getTagStyles(data.topic)}`}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:brightness-95 transition-all ${getTagStyles(data.topic)}`}
             >
                 {data.topic}
             </span>
@@ -228,46 +228,36 @@ const TopicPageView = ({
       setLoading(true);
       setError(null);
       try {
-        console.log(`[TopicPage] Starting 3-step fetch for slug: ${slug}`);
-
-        // STEP A: Fetch the tag object from the tags table using the slug from the URL.
+        // STEP A: Fetch the tag object. Use .ilike for case-insensitive slug lookup
         const { data: tagDataArray, error: tagError } = await supabase
           .from('tags')
           .select('id, name, slug')
-          .eq('slug', slug);
+          .ilike('slug', slug)
+          .limit(1);
         
         if (tagError) throw new Error(`Tag fetch error: ${tagError.message}`);
         
         const tagData = tagDataArray?.[0];
-        if (!tagData) throw new Error(`Topic with slug "${slug}" was not found.`);
+        if (!tagData) {
+            // Tag not found, display empty state gracefully
+            setTagInfo({ name: slug, slug: slug });
+            setAllKhutbahs([]);
+            setLoading(false);
+            return;
+        }
         
         setTagInfo(tagData);
 
-        // STEP B: Use the tag.id to get all khutbah_id entries from the khutbah_tags junction table.
-        const { data: junctionData, error: junctionError } = await supabase
-          .from('khutbah_tags')
-          .select('khutbah_id')
-          .eq('tag_id', tagData.id);
-        
-        if (junctionError) throw new Error(`Junction fetch error: ${junctionError.message}`);
-        
-        const khutbahIds = (junctionData || []).map(j => j.khutbah_id);
-        console.log(`[TopicPage] Found ${khutbahIds.length} khutbah IDs for tag: ${tagData.name}`);
-
-        if (khutbahIds.length === 0) {
-          setAllKhutbahs([]);
-          setLoading(false);
-          return;
-        }
-
-        // STEP C: Fetch full khutbah details from the khutbahs table for all IDs found in Step B.
+        // COMBINED STEP B & C: Fetch khutbahs directly using a join (!inner)
+        // This is much more efficient than using .in() with a potentially massive list of IDs
         const { data: khutbahData, error: khutbahError } = await supabase
           .from('khutbahs')
           .select(`
             id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
-            imams ( slug )
+            imams ( slug ),
+            khutbah_tags!inner ( tag_id )
           `)
-          .in('id', khutbahIds)
+          .eq('khutbah_tags.tag_id', tagData.id)
           .order('created_at', { ascending: false });
 
         if (khutbahError) throw new Error(`Khutbah fetch error: ${khutbahError.message}`);
@@ -281,7 +271,7 @@ const TopicPageView = ({
             likes: item.likes_count,
             comments_count: item.comments_count,
             published_at: item.created_at,
-            rating: item.rating || 4.8,
+            rating: typeof item.rating === 'number' ? item.rating : parseFloat(item.rating || '4.8'),
             imam_slug: item.imams?.slug
         }));
 
@@ -297,13 +287,12 @@ const TopicPageView = ({
   }, [slug]);
 
   const handleAuthorClick = (authorName: string) => {
-    // Navigate back to parent and trigger list filter
     onBack();
   };
 
   const filteredKhutbahs = useMemo(() => {
     if (!searchQuery.trim()) return allKhutbahs;
-    const lowerQuery = searchQuery.toLowerCase();
+    const lowerQuery = searchQuery.toLowerCase().trim();
     return allKhutbahs.filter(k => 
       k.title.toLowerCase().includes(lowerQuery) || 
       k.author.toLowerCase().includes(lowerQuery)
@@ -314,15 +303,6 @@ const TopicPageView = ({
     <div className="flex flex-col items-center justify-center py-32">
       <Loader2 size={48} className="animate-spin text-emerald-600 mb-4" />
       <p className="text-emerald-800 font-bold uppercase tracking-widest">Gathering Wisdom...</p>
-    </div>
-  );
-
-  if (error) return (
-    <div className="p-8 text-center bg-red-50 rounded-2xl border border-red-100 max-w-2xl mx-auto mt-10">
-      <AlertCircle size={40} className="mx-auto mb-4 text-red-500" />
-      <h3 className="text-xl font-bold text-red-900 mb-2">Notice</h3>
-      <p className="text-red-700 mb-6">{error}</p>
-      <button onClick={onBack} className="bg-red-600 text-white px-6 py-2 rounded-xl font-bold">Back to Home</button>
     </div>
   );
 
@@ -344,7 +324,7 @@ const TopicPageView = ({
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input 
                 type="text" 
-                placeholder={`Search ${tagInfo?.name} results...`}
+                placeholder={`Search results...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-12 pr-6 py-4 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-emerald-500 outline-none text-lg transition-all"
@@ -368,6 +348,7 @@ const TopicPageView = ({
         <div className="bg-white rounded-[2.5rem] border-2 border-dashed border-gray-100 p-20 text-center">
            <FileText size={64} className="mx-auto mb-4 text-gray-200" />
            <p className="text-gray-400 font-bold text-xl">No sermons found matching your filter.</p>
+           <button onClick={onBack} className="mt-6 text-emerald-600 font-bold hover:underline">Return to Library</button>
         </div>
       )}
     </div>
@@ -594,9 +575,10 @@ const ImamProfileView = ({
 
   const filteredSermons = useMemo(() => {
     if (!sermonSearch) return sermons;
+    const lowerQuery = sermonSearch.toLowerCase().trim();
     return sermons.filter(s => 
-      s.title.toLowerCase().includes(sermonSearch.toLowerCase()) ||
-      (s.topic && s.topic.toLowerCase().includes(sermonSearch.toLowerCase()))
+      s.title.toLowerCase().includes(lowerQuery) ||
+      (s.topic && s.topic.toLowerCase().includes(lowerQuery))
     );
   }, [sermons, sermonSearch]);
 
@@ -628,7 +610,7 @@ const ImamProfileView = ({
           </div>
           
           <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+            <div className="flex wrap items-center gap-2 mb-0.5">
               <h1 className="text-xl md:text-2xl font-serif font-bold text-gray-900 truncate">{imam.name}</h1>
               <span className="font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded text-[10px] uppercase whitespace-nowrap border border-teal-100">Verified Scholar</span>
               {imam.city && (
@@ -891,11 +873,22 @@ const ListView = ({
                     </h2>
                     <p className="text-gray-500 mt-1">{count} results found</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3 items-center">
+                    {/* Refine Search inside ListView */}
+                    <div className="relative w-full sm:w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input 
+                            type="text" 
+                            placeholder="Refine search..." 
+                            value={filters.search || ''} 
+                            onChange={(e) => setFilters({...filters, search: e.target.value})}
+                            className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm shadow-sm transition-all"
+                        />
+                    </div>
                     <select 
                         value={filters.sort || 'latest'} 
                         onChange={(e) => setFilters({...filters, sort: e.target.value})}
-                        className="px-4 py-2 bg-white border border-gray-200 rounded-lg outline-none text-sm font-medium"
+                        className="px-4 py-2 bg-white border border-gray-200 rounded-xl outline-none text-sm font-medium shadow-sm"
                     >
                         <option value="latest">Latest</option>
                         <option value="trending">Trending</option>
@@ -952,7 +945,11 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const { user: authUser, requireAuth } = useAuth(); 
 
   const handleNavigate = (newView: any, filters: any = {}) => {
-      setActiveFilters(filters);
+      // Ensure all navigation search params are trimmed
+      const sanitizedFilters = { ...filters };
+      if (sanitizedFilters.search) sanitizedFilters.search = sanitizedFilters.search.trim();
+      
+      setActiveFilters(sanitizedFilters);
       setView(newView);
   };
 
@@ -1139,8 +1136,23 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                         placeholder="Topic, imam, or keyword..." 
                         value={activeFilters.search || ''} 
                         onChange={(e) => setActiveFilters({...activeFilters, search: e.target.value})}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                const term = activeFilters.search?.trim();
+                                if (term) handleNavigate('list', { search: term });
+                            }
+                        }}
                         className="w-full pl-16 sm:pl-24 pr-24 sm:pr-40 py-6 sm:py-8 bg-white border border-gray-200 rounded-full shadow-2xl shadow-emerald-50/50 focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 outline-none text-xl sm:text-2xl transition-all placeholder-gray-300" 
                     />
+                    <button 
+                        onClick={() => {
+                            const term = activeFilters.search?.trim();
+                            if (term) handleNavigate('list', { search: term });
+                        }}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 bg-emerald-600 text-white px-8 py-4 rounded-full font-bold hover:bg-emerald-700 transition-all hidden sm:block shadow-lg"
+                    >
+                        Search
+                    </button>
                 </div>
              </div>
           )}

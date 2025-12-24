@@ -16,9 +16,7 @@ export function useHomepageData() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // We use Promise.all to fetch data in parallel
         const [latest, trending, classics, topics, imams] = await Promise.all([
-          // Latest
           supabase
             .from('khutbahs')
             .select(`
@@ -27,7 +25,6 @@ export function useHomepageData() {
             `)
             .order('created_at', { ascending: false })
             .limit(6),
-          // Trending
           supabase
             .from('khutbahs')
             .select(`
@@ -36,7 +33,6 @@ export function useHomepageData() {
             `)
             .order('likes_count', { ascending: false })
             .limit(6),
-          // Classics
           supabase
             .from('khutbahs')
             .select(`
@@ -45,13 +41,11 @@ export function useHomepageData() {
             `)
             .gt('likes_count', 10)
             .limit(6),
-          // Topics
           supabase
             .from('topics')
             .select('*')
             .order('khutbah_count', { ascending: false })
             .limit(12),
-          // Imams
           supabase
             .from('imams')
             .select('*')
@@ -68,7 +62,7 @@ export function useHomepageData() {
             likes: item.likes_count,
             comments_count: item.comments_count,
             published_at: item.created_at,
-            rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1),
+            rating: typeof item.rating === 'number' ? item.rating : parseFloat(item.rating || '4.8'),
             imam_slug: item.imams?.slug
         });
 
@@ -112,9 +106,13 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
         imams ( slug )
       `, { count: 'exact' });
 
-    if (filters.search) {
-       query = query.or(`title.ilike.%${filters.search}%,author.ilike.%${filters.search}%`);
+    // QUERY GUARD: Only apply the 'or' filter if search term is non-empty after trimming
+    // This prevents 400 Bad Request errors from Supabase on invalid or empty or() parameters
+    if (filters.search && filters.search.trim().length > 0) {
+       const term = filters.search.trim();
+       query = query.or(`title.ilike.%${term}%,author.ilike.%${term}%`);
     }
+
     if (filters.topic && filters.topic !== 'All') query = query.eq('topic', filters.topic);
     if (filters.imam) query = query.eq('author', filters.imam);
 
@@ -140,7 +138,7 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
             likes: item.likes_count,
             comments_count: item.comments_count,
             published_at: item.created_at,
-            rating: item.rating || (4.5 + Math.random() * 0.5).toFixed(1),
+            rating: typeof item.rating === 'number' ? item.rating : parseFloat(item.rating || '4.8'),
             imam_slug: item.imams?.slug
         }));
 
@@ -148,6 +146,8 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
         setCount(totalCount || 0);
         setPage(pageNum);
         setHasMore(results.length === PAGE_SIZE);
+    } else if (error) {
+        console.error("[usePaginatedKhutbahs] Query error:", error);
     }
     
     setIsLoading(false);
