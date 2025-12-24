@@ -181,7 +181,7 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
          <div className="flex items-center gap-4">
              <button 
                 onClick={handleLikeClick}
-                className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-red-500 transition-colors"
+                className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-red-500 transition-all active:scale-125"
              >
                  <Heart size={14} className="text-gray-400 group-hover:text-red-500 transition-colors" /> 
                  {data.likes}
@@ -1126,7 +1126,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [scrollToComments, setScrollToComments] = useState(false);
+  const [shouldScrollToComments, setShouldScrollToComments] = useState(false);
   
   const commentsSectionRef = useRef<HTMLDivElement>(null);
   const { user: authUser, requireAuth } = useAuth(); 
@@ -1146,13 +1146,13 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     fetchBookmarks();
   }, [authUser, user]);
 
-  // Handle auto-scroll to comments
+  // Handle auto-scroll when detail view loads
   useEffect(() => {
-    if (view === 'detail' && !detailLoading && scrollToComments && commentsSectionRef.current) {
+    if (view === 'detail' && !detailLoading && shouldScrollToComments && commentsSectionRef.current) {
         commentsSectionRef.current.scrollIntoView({ behavior: 'smooth' });
-        setScrollToComments(false); // Reset flag
+        setShouldScrollToComments(false); // Reset flag
     }
-  }, [view, detailLoading, scrollToComments]);
+  }, [view, detailLoading, shouldScrollToComments]);
 
   const handleNavigate = (newView: any, filters: any = {}) => {
       const sanitizedFilters = { ...filters };
@@ -1185,7 +1185,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     }
   };
 
-  const handleLike = async (e: React.MouseEvent | null, khutbahId: string) => {
+  const handleLike = async (khutbahId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     const currentUser = authUser || user;
     if (!currentUser) {
@@ -1194,9 +1194,25 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     }
 
     try {
+        // DB Update
         await supabase.rpc('increment_khutbah_likes', { row_id: khutbahId });
         
-        // Optimistically update local detail state if viewing this khutbah
+        // IMMEDIATE STATE SYNC: Update local state arrays for instant UI feedback
+        const syncLikes = (k: KhutbahPreview) => 
+            k.id === khutbahId ? { ...k, likes: (k.likes || 0) + 1 } : k;
+
+        if (homeData) {
+            setHomeData({
+                ...homeData,
+                latest: homeData.latest.map(syncLikes),
+                trending: homeData.trending.map(syncLikes),
+                classics: homeData.classics.map(syncLikes),
+                featured: homeData.featured.map(syncLikes)
+            });
+        }
+        setListData(prev => prev.map(syncLikes));
+
+        // Detail View Sync
         if (detailData && detailData.id === khutbahId) {
             setDetailData({ ...detailData, likes: (detailData.likes || 0) + 1 });
         }
@@ -1285,7 +1301,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   };
 
   const handleSelectKhutbah = async (preview: KhutbahPreview, options?: { scrollToComments?: boolean }) => {
-      // 1. STATE-FIRST SYNC: Immediately increment view_count in memory across all local state arrays
+      // 1. Sync View Counts Locally FIRST for instant feedback
       const syncViewCount = (k: KhutbahPreview) => 
           k.id === preview.id ? { ...k, view_count: (k.view_count || 0) + 1 } : k;
 
@@ -1300,20 +1316,17 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       }
       setListData(prev => prev.map(syncViewCount));
 
-      // Set scroll flag if requested
-      if (options?.scrollToComments) {
-          setScrollToComments(true);
-      }
-
-      // 2. Trigger view increment on server (background)
+      // 2. Trigger DB increment (background)
       incrementViews(preview.id);
       
+      // 3. Setup transition
       setSelectedKhutbahId(preview.id);
       setView('detail');
       setDetailLoading(true);
       setIsInMyKhutbahs(false);
       setKhutbahCards([]);
       setCommentText('');
+      setShouldScrollToComments(options?.scrollToComments || false);
       
       try {
           const { data, error } = await supabase
@@ -1330,7 +1343,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   topic: data.topic,
                   labels: data.tags,
                   likes: data.likes_count,
-                  view_count: (data.view_count || 0) + 1, // Use optimistically incremented value
+                  view_count: (data.view_count || 0) + 1, // Optimistic view count for inside display
                   content: data.extracted_text || data.content,
                   style: data.topic,
                   date: data.created_at ? new Date(data.created_at).toLocaleDateString() : undefined,
@@ -1569,7 +1582,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                       </button>
 
                       <button 
-                        onClick={() => handleLike(null, detailData.id)}
+                        onClick={() => handleLike(detailData.id)}
                         className="flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border border-gray-200 bg-white text-gray-700 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 shadow-sm"
                       >
                         <Heart size={20} />
@@ -1588,8 +1601,8 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                             />
                         </div>
 
-                        {/* Comments Section */}
-                        <div ref={commentsSectionRef} className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-gray-100 w-full">
+                        {/* Comments Section Wrapper for Ref Scrolling */}
+                        <div ref={commentsSectionRef} className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-gray-100 w-full scroll-mt-20">
                            <h3 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-3">
                               <MessageCircle size={24} className="text-blue-500" />
                               Community Discussion ({comments.length})
