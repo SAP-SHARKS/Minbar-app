@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, Play, FileText, ChevronLeft, Check, 
@@ -506,7 +505,7 @@ const ImamProfileView = ({
         <ChevronLeft size={16} /> Back
       </button>
       
-      {/* Restored Bio and Stats Header */}
+      {/* Bio and Stats Header Restored */}
       <div className="bg-white rounded-3xl border border-gray-100 p-8 mb-10 shadow-sm">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
               <div className={`w-32 h-32 rounded-3xl flex items-center justify-center text-4xl font-bold shrink-0 shadow-lg ${getAvatarColor(imam.name)}`}>

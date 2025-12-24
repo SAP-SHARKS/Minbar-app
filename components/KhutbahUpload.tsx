@@ -1,9 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileSpreadsheet, FileText, CheckCircle, AlertCircle, 
   Loader2, UploadCloud, Plus, Check, User, ExternalLink, AlertTriangle, Info, Play, RefreshCw, Upload,
-  Lock
+  Lock, ShieldAlert
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import * as XLSX from 'xlsx';
@@ -126,7 +125,12 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
   }
 
   async function importToDatabase() {
-    if (!isAdmin) return;
+    // Immediate return if not authorized user
+    if (user?.email !== 'zaid.aiesec@gmail.com') {
+      alert("Unauthorized: Only zaid.aiesec@gmail.com can sync database metadata.");
+      return;
+    }
+    
     setIsImporting(true);
     let success = 0; let skipped = 0; let errors = 0;
 
@@ -170,7 +174,15 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
 
   return (
     <div className="p-8">
-      <h2 className="text-xl font-bold mb-2">Import Excel Metadata</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-bold">Import Excel Metadata</h2>
+        {!isAdmin && (
+           <div className="bg-red-50 text-red-600 px-4 py-2 rounded-xl border border-red-100 flex items-center gap-2 text-sm font-bold">
+             <ShieldAlert size={18}/> Restricted to Admin Access
+           </div>
+        )}
+      </div>
+
       {!showPreview && !importComplete && (
         <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-gray-300 rounded-2xl p-20 text-center hover:border-emerald-500 cursor-pointer transition-all">
           <input ref={fileInputRef} type="file" accept=".xlsx" onChange={handleExcelUpload} className="hidden" />
@@ -207,12 +219,12 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
                   className={`bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold flex gap-2 shadow-lg transition-all ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'shadow-emerald-100 hover:bg-emerald-700'}`}
                 >
                     {isImporting ? <Loader2 className="animate-spin" size={20}/> : <UploadCloud size={20}/>}
-                    Confirm Sync ({khutbahs.length})
+                    {isAdmin ? `Confirm Sync (${khutbahs.length})` : 'Admin Access Required'}
                 </button>
              </div>
              {!isAdmin && (
                 <div className="flex items-center gap-1.5 text-red-500 font-bold text-xs uppercase tracking-wider">
-                  <Lock size={12}/> Admin Only: zaid.aiesec@gmail.com
+                  <Lock size={12}/> Authorized only for zaid.aiesec@gmail.com
                 </div>
              )}
           </div>
@@ -302,7 +314,12 @@ const PdfUploadSection = () => {
   };
 
   async function processAllFiles() {
-    if (!isAdmin) return;
+    // Strict Email Authorization Check
+    if (user?.email !== 'zaid.aiesec@gmail.com') {
+      alert("Unauthorized: Only zaid.aiesec@gmail.com can process PDF content.");
+      return;
+    }
+    
     setIsProcessing(true);
     for (let i = 0; i < files.length; i++) {
       if (files[i].status === 'done' || files[i].status === 'updated') continue;
@@ -335,6 +352,9 @@ const PdfUploadSection = () => {
         });
         const { text: rawText } = await fetchApi('/api/extract-pdf', { base64, fileName: item.name });
 
+        // Sanitization and size limiting to prevent 400 Bad Request
+        const sanitizedContent = (rawText || '').trim().substring(0, 100000); 
+
         let khutbahId;
         let action: 'updated' | 'done';
 
@@ -356,7 +376,7 @@ const PdfUploadSection = () => {
         }
 
         const formatData = await fetchApi('/api/process-khutbah', { 
-            content: rawText, type: 'format', khutbahId: khutbahId 
+            content: sanitizedContent, type: 'format', khutbahId: khutbahId 
         });
         await fetchApi('/api/process-khutbah', { 
             content: formatData.result, type: 'cards', khutbahId: khutbahId 
@@ -388,10 +408,15 @@ const PdfUploadSection = () => {
             <h2 className="text-xl font-bold text-gray-900">Attach PDFs to Excel Records</h2>
             <p className="text-gray-500 text-sm">Matching by: Imam ID + Speaker File Index</p>
          </div>
-         {files.length > 0 && (
+         {isAdmin && files.length > 0 && (
            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold hover:bg-emerald-100 transition-all border border-emerald-100">
               <Plus size={18}/> Add More
            </button>
+         )}
+         {!isAdmin && (
+           <div className="bg-red-50 text-red-600 px-4 py-2 rounded-xl border border-red-100 flex items-center gap-2 text-sm font-bold">
+             <ShieldAlert size={18}/> Restricted to Admin Access
+           </div>
          )}
       </div>
 
@@ -433,12 +458,12 @@ const PdfUploadSection = () => {
                   className={`bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'shadow-emerald-100 hover:bg-emerald-700'}`}
                 >
                     {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-                    Start Processing
+                    {isAdmin ? 'Start Processing' : 'Admin Only'}
                 </button>
              </div>
              {!isAdmin && (
                 <div className="flex items-center gap-1.5 text-red-500 font-bold text-xs uppercase tracking-wider">
-                  <Lock size={12}/> Admin Only: zaid.aiesec@gmail.com
+                  <Lock size={12}/> Restricted to Admin: zaid.aiesec@gmail.com
                 </div>
              )}
           </div>
@@ -462,6 +487,7 @@ const PdfUploadSection = () => {
               </div>
               <p className="text-gray-900 text-xl font-bold mb-2">Drop PDFs here or click to browse</p>
               <p className="text-gray-400 font-medium">Standard naming: <code className="bg-gray-200/50 px-1.5 py-0.5 rounded text-gray-600 font-mono text-xs">12_Hamza Yusuf_...pdf</code></p>
+              {!isAdmin && <p className="text-red-500 font-black mt-4 uppercase text-xs tracking-widest"><Lock className="inline mr-1" size={12}/> Restricted Mode</p>}
               {isDragging && (
                   <div className="mt-4 inline-block px-4 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full animate-bounce">
                     Ready to drop!
@@ -482,7 +508,7 @@ export const KhutbahUpload: React.FC<KhutbahUploadProps> = ({ onSuccess }) => {
          <div className="w-full">
             <div className="mb-8">
               <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Sync Manager</h2>
-              <p className="text-gray-500 mt-2 text-lg">Clean deduplication between Excel metadata and PDF source files.</p>
+              <p className="text-gray-500 mt-2 text-lg">Admin portal for metadata syncing and PDF processing.</p>
             </div>
 
             <div className="flex p-1 bg-gray-200/60 rounded-2xl w-fit mb-10 border border-gray-200">
