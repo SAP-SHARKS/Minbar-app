@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { KhutbahPreview, Topic, Imam } from './types';
@@ -22,7 +21,7 @@ export function useHomepageData() {
           .from('khutbahs')
           .select(`
             id, title, author, topic, tags, likes_count, comments_count, view_count, created_at, rating,
-            imams ( slug )
+            imams ( name, slug )
           `)
           .order('created_at', { ascending: false })
           .limit(6),
@@ -30,7 +29,7 @@ export function useHomepageData() {
           .from('khutbahs')
           .select(`
             id, title, author, topic, tags, likes_count, comments_count, view_count, created_at, rating,
-            imams ( slug )
+            imams ( name, slug )
           `)
           .order('likes_count', { ascending: false })
           .limit(6),
@@ -38,7 +37,7 @@ export function useHomepageData() {
           .from('khutbahs')
           .select(`
             id, title, author, topic, tags, likes_count, comments_count, view_count, created_at, rating,
-            imams ( slug )
+            imams ( name, slug )
           `)
           .gt('likes_count', 10)
           .limit(6),
@@ -99,7 +98,6 @@ export function useHomepageData() {
     fetchData();
   }, [fetchData]);
 
-  // Added setData to the return object to fix the "Property 'setData' does not exist" error in KhutbahLibrary.tsx
   return { data, isLoading, refresh: fetchData, setData };
 }
 
@@ -119,18 +117,22 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
       .from('khutbahs')
       .select(`
         id, title, author, topic, tags, likes_count, comments_count, view_count, created_at, rating,
-        imams ( slug )
+        imams ( name, slug )
       `, { count: 'exact' });
 
     if (filters.search && filters.search.trim().length > 0) {
        const term = filters.search.trim();
-       query = query.or(`title.ilike.%${term}%,author.ilike.%${term}%`);
+       // Using weighted full-text search as requested
+       query = query.textSearch('fts_weighted', term, { config: 'english', type: 'websearch' });
     }
 
     if (filters.topic && filters.topic !== 'All') query = query.eq('topic', filters.topic);
     if (filters.imam) query = query.eq('author', filters.imam);
 
-    if (filters.sort === 'trending') {
+    // Sorting Logic: Prioritize FTS relevance ranking if searching
+    if (filters.search) {
+       query = query.order('fts_weighted', { ascending: false });
+    } else if (filters.sort === 'trending') {
       query = query.order('likes_count', { ascending: false });
     } else {
       query = query.order('created_at', { ascending: false });
@@ -165,6 +167,10 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
     
     setIsLoading(false);
   }, [filters]);
+
+  useEffect(() => {
+    fetchPage(0, true);
+  }, [fetchPage]);
 
   const loadMore = () => {
     if (!isLoading && hasMore) {

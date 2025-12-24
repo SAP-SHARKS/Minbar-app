@@ -5,7 +5,7 @@ import {
   Minus, Plus, Type, ChevronRight, TrendingUp, Grid, User,
   BookOpen, Moon, Sun, Users, Activity, Bookmark, LayoutList, Sparkles,
   Calendar, Shield, CheckCircle, ArrowLeft, Filter, ArrowRight, Bookmark as BookmarkIcon,
-  Eye
+  Eye, CheckCircle2
 } from 'lucide-react';
 import { AUTHORS_DATA } from '../constants';
 import { Khutbah, KhutbahPreview, AuthorData, Imam, Topic } from '../types';
@@ -86,8 +86,8 @@ interface KhutbahCardProps {
   onAuthorClick?: (authorName: string) => void;
   onTagClick?: (slug: string) => void;
   onCommentClick?: (e: React.MouseEvent, data: KhutbahPreview) => void;
-  onBookmark?: (e: React.MouseEvent, id: string) => void;
-  onLike?: (e: React.MouseEvent, id: string) => void;
+  onBookmark?: (e: React.MouseEvent | null, id: string) => void;
+  onLike?: (e: React.MouseEvent | null, id: string) => void;
   isBookmarked?: boolean;
   isLiked?: boolean;
 }
@@ -108,8 +108,8 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({
   };
 
   const handleLikeClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // ✅ Prevents card click
-    onLike?.(e, data.id); // ✅ Uses the handler
+    e.stopPropagation(); // Prevents card click
+    onLike?.(e, data.id); // Uses the handler
   };
 
   const tagHoverClasses = "hover:bg-gray-900 hover:text-white hover:underline transition-all duration-200";
@@ -177,7 +177,7 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({
       <div className="pt-5 border-t border-gray-50 mt-5 flex items-center justify-between">
          <div className="flex items-center gap-4">
              <button 
-                onClick={handleLikeClick} // ✅ Uses the handler
+                onClick={handleLikeClick}
                 className={`flex items-center gap-1.5 text-xs font-medium transition-all active:scale-125 ${isLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
              >
                  <Heart size={14} className={isLiked ? 'text-red-500 fill-red-500' : 'text-gray-400 group-hover:text-red-500 transition-colors'} /> 
@@ -350,7 +350,7 @@ const TopicPageView = ({
   onSelectKhutbah: (k: KhutbahPreview) => void;
   onSelectImam: (slug: string) => void;
   onTagClick: (slug: string) => void;
-  onLike?: (e: React.MouseEvent, id: string) => void;
+  onLike?: (e: React.MouseEvent | null, id: string) => void;
   userLikes?: Set<string>;
 }) => {
   const [tagInfo, setTagInfo] = useState<any>(null);
@@ -437,7 +437,7 @@ const ImamDetailedView = ({
         <div className="lg:col-span-2 space-y-8">
           <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
             <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <User size={24} className="text-teal-500" /> About Dr. {imam.name}
+              <User size={24} className="text-teal-500" /> About {imam.name}
             </h2>
             <div className="prose prose-teal max-w-none text-gray-600 leading-relaxed space-y-4">
               <p>{imam.bio}</p>
@@ -465,7 +465,7 @@ const ImamProfileView = ({
   onSelectKhutbah: (k: KhutbahPreview) => void;
   onNavigateDetails: (imam: Imam) => void;
   onTagClick: (slug: string) => void;
-  onLike?: (e: React.MouseEvent, id: string) => void;
+  onLike?: (e: React.MouseEvent | null, id: string) => void;
   userLikes?: Set<string>;
 }) => {
   const [imam, setImam] = useState<Imam | null>(null);
@@ -504,16 +504,44 @@ const ImamProfileView = ({
       <button onClick={onBack} className="mb-3 flex items-center text-gray-500 hover:text-teal-600 gap-2 font-medium">
         <ChevronLeft size={16} /> Back
       </button>
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 flex flex-col md:flex-row items-center gap-6 mb-8">
-          <div className={`w-24 h-24 rounded-2xl flex items-center justify-center text-3xl font-bold shrink-0 shadow-sm ${getAvatarColor(imam.name)}`}>
-            {imam.avatar_url ? <img src={imam.avatar_url} alt={imam.name} className="w-full h-full object-cover rounded-2xl" /> : imam.name.charAt(0)}
-          </div>
-          <div className="flex-1 text-center md:text-left">
-              <h1 className="text-3xl font-serif font-bold text-gray-900 mb-2">{imam.name}</h1>
-              <p className="text-gray-500 max-w-2xl mb-4">{imam.bio}</p>
-              <button onClick={() => onNavigateDetails(imam)} className="text-teal-600 font-bold text-sm hover:underline">View Full Details</button>
+
+      {/* Profile Header - Bio and Stats Restored as requested */}
+      <div className="bg-white rounded-3xl border border-gray-100 p-8 mb-10 shadow-sm">
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+              <div className={`w-32 h-32 rounded-3xl flex items-center justify-center text-4xl font-bold shrink-0 shadow-lg ${getAvatarColor(imam.name)}`}>
+                  {imam.avatar_url ? <img src={imam.avatar_url} alt={imam.name} className="w-full h-full object-cover rounded-3xl" /> : imam.name.charAt(0)}
+              </div>
+              <div className="flex-1 text-center md:text-left">
+                  <h1 className="text-4xl font-serif font-bold text-gray-900 mb-2">{imam.name}</h1>
+                  
+                  {/* Bio Restoration */}
+                  <p className="text-gray-600 mt-2 mb-4 leading-relaxed max-w-3xl">
+                      {imam.bio || 'Biography coming soon.'}
+                  </p>
+
+                  {/* Stats Row Restoration */}
+                  <div className="flex items-center justify-center md:justify-start gap-6 mb-6">
+                      <div className="flex flex-col">
+                          <span className="text-2xl font-bold text-gray-900">{imam.khutbah_count || 0}</span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Khutbahs</span>
+                      </div>
+                      <div className="w-px h-8 bg-gray-100"></div>
+                      <div className="flex flex-col">
+                          <span className="text-2xl font-bold text-gray-900">4.9</span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Avg Rating</span>
+                      </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => onNavigateDetails(imam)} 
+                    className="bg-emerald-600 text-white px-8 py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                  >
+                    View Full Profile
+                  </button>
+              </div>
           </div>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {sermons.map(s => (
           <KhutbahCard 
@@ -537,8 +565,8 @@ interface HomeViewProps {
     onSelectKhutbah: (k: KhutbahPreview) => void;
     onSelectImam: (slug: string) => void;
     onTagClick: (slug: string) => void;
-    onBookmark: (e: React.MouseEvent, id: string) => void;
-    onLike: (e: React.MouseEvent, id: string) => void;
+    onBookmark: (e: React.MouseEvent | null, id: string) => void;
+    onLike: (e: React.MouseEvent | null, id: string) => void;
     userBookmarks: Set<string>;
     userLikes: Set<string>;
 }
@@ -582,7 +610,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                         <KhutbahCard 
                             key={k.id} data={k} onClick={() => onSelectKhutbah(k)} 
                             onAuthorClick={handleAuthorClick} onTagClick={onTagClick} 
-                            onBookmark={onBookmark} onLike={onLike}
+                            onBookmark={(e) => onBookmark(e, k.id)} onLike={(e) => onLike(e, k.id)}
                             isBookmarked={userBookmarks.has(k.id)}
                             isLiked={userLikes.has(k.id)}
                         />
@@ -603,7 +631,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                         <KhutbahCard 
                             key={k.id} data={k} onClick={() => onSelectKhutbah(k)} 
                             onAuthorClick={handleAuthorClick} onTagClick={onTagClick} 
-                            onBookmark={onBookmark} onLike={onLike}
+                            onBookmark={(e) => onBookmark(e, k.id)} onLike={(e) => onLike(e, k.id)}
                             isBookmarked={userBookmarks.has(k.id)}
                             isLiked={userLikes.has(k.id)}
                         />
@@ -659,7 +687,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                             <KhutbahCard 
                                 data={k} onClick={() => onSelectKhutbah(k)} 
                                 onAuthorClick={handleAuthorClick} onTagClick={onTagClick} 
-                                onBookmark={onBookmark} onLike={onLike}
+                                onBookmark={(e) => onBookmark(e, k.id)} onLike={(e) => onLike(e, k.id)}
                                 isBookmarked={userBookmarks.has(k.id)}
                                 isLiked={userLikes.has(k.id)}
                             />
@@ -683,8 +711,8 @@ interface ListViewProps {
     onBack: () => void;
     onSelectImam: (slug: string) => void;
     onTagClick: (slug: string) => void;
-    onBookmark: (e: React.MouseEvent, id: string) => void;
-    onLike: (e: React.MouseEvent, id: string) => void;
+    onBookmark: (e: React.MouseEvent | null, id: string) => void;
+    onLike: (e: React.MouseEvent | null, id: string) => void;
     userBookmarks: Set<string>;
     userLikes: Set<string>;
 }
@@ -715,7 +743,7 @@ const ListView: React.FC<ListViewProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
                 {data.map((k, index) => (
                     <div key={k.id} ref={index === data.length - 1 ? lastElementRef : null}>
-                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onAuthorClick={handleAuthorClick} onTagClick={onTagClick} onBookmark={onBookmark} onLike={onLike} isBookmarked={userBookmarks.has(k.id)} isLiked={userLikes.has(k.id)} />
+                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onAuthorClick={handleAuthorClick} onTagClick={onTagClick} onBookmark={(e) => onBookmark(e, k.id)} onLike={(e) => onLike(e, k.id)} isBookmarked={userBookmarks.has(k.id)} isLiked={userLikes.has(k.id)} />
                     </div>
                 ))}
             </div>
@@ -777,7 +805,24 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const handleNavigateImamDetails = (imam: Imam) => { setActiveImam(imam); setView('imam-details'); };
 
   const incrementViews = async (khutbahId: string) => {
-    try { await supabase.rpc('increment_khutbah_views', { row_id: khutbahId }); } catch (err) { console.error("View tracking error:", err); }
+    try { 
+        await supabase.rpc('increment_khutbah_views', { row_id: khutbahId }); 
+        
+        // Manual local state sync for view counts across views
+        const updateViews = (k: any) => k.id === khutbahId ? { ...k, view_count: (k.view_count || 0) + 1 } : k;
+        
+        if (homeData) {
+            setHomeData({
+                ...homeData,
+                latest: homeData.latest.map(updateViews),
+                trending: homeData.trending.map(updateViews),
+                classics: homeData.classics.map(updateViews),
+                featured: homeData.featured.map(updateViews)
+            });
+        }
+        setListData(prev => prev.map(updateViews));
+        
+    } catch (err) { console.error("View tracking error:", err); }
   };
 
   const handleLike = async (e: React.MouseEvent | null, khutbahId: string) => {
@@ -799,12 +844,9 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
             throw error;
         }
 
-        console.log("Like toggle response:", data);
-
         // Update local detail state if viewing this khutbah
         if (data && data.length > 0) {
             const { new_count, is_liked } = data[0];
-            console.log(`Like ${is_liked ? 'added' : 'removed'}, new count: ${new_count}`);
 
             // Update userLikes set so the heart toggles filled/outline
             setUserLikes(prev => {
@@ -882,7 +924,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       try {
           const { data } = await supabase.from('khutbahs').select('*').eq('id', preview.id).single();
           if (data) {
-              setDetailData({ id: data.id, title: data.title, author: data.author, topic: data.topic, labels: data.tags, likes: data.likes_count, content: data.extracted_text || data.content, style: data.topic, date: data.created_at ? new Date(data.created_at).toLocaleDateString() : undefined, file_url: data.file_url, comments: [] });
+              setDetailData({ id: data.id, title: data.title, author: data.author, topic: data.topic, labels: data.tags, likes: data.likes_count, content: data.extracted_text || data.content, style: data.topic, date: data.created_at ? new Date(data.created_at).toLocaleDateString() : undefined, file_url: data.file_url, comments: [], view_count: (data.view_count || 0) + 1 });
               const { data: cardsData } = await supabase.from('khutbah_cards').select('*').eq('khutbah_id', data.id).order('card_number', { ascending: true });
               if (cardsData) setKhutbahCards(cardsData);
               const { data: comms } = await supabase.from('khutbah_comments').select('*').eq('khutbah_id', data.id).order('created_at', { ascending: false });
@@ -987,8 +1029,28 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                 <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-serif font-bold text-gray-900 mb-8 tracking-tight max-w-5xl mx-auto leading-tight">Find a khutbah in <span className="text-emerald-600">minutes</span>, not days.</h1>
                 <div className="max-w-4xl mx-auto relative mb-16 px-4 sm:px-0">
                     <div className="absolute inset-y-0 left-6 sm:left-10 flex items-center pointer-events-none"><Search className="text-gray-400" size={32} /></div>
-                    <input type="text" placeholder="Topic, imam, or keyword..." value={activeFilters.search || ''} onChange={(e) => setActiveFilters({...activeFilters, search: e.target.value})} onKeyDown={(e) => { if (e.key === 'Enter') { const term = activeFilters.search?.trim(); if (term) handleNavigate('list', { search: term }); } }} className="w-full pl-16 sm:pl-24 pr-24 sm:pr-40 py-6 sm:py-8 bg-white border border-gray-200 rounded-full shadow-2xl shadow-emerald-50/50 focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 outline-none text-xl sm:text-2xl transition-all placeholder-gray-300" />
-                    <button onClick={() => { const term = activeFilters.search?.trim(); if (term) handleNavigate('list', { search: term }); }} className="absolute right-4 top-1/2 -translate-y-1/2 bg-emerald-600 text-white px-8 py-4 rounded-full font-bold hover:bg-emerald-700 transition-all hidden sm:block shadow-lg">Search</button>
+                    <input 
+                        type="text" 
+                        placeholder="Topic, imam, or keyword..." 
+                        value={activeFilters.search || ''} 
+                        onChange={(e) => setActiveFilters({...activeFilters, search: e.target.value})} 
+                        onKeyDown={(e) => { 
+                            if (e.key === 'Enter') { 
+                                const term = activeFilters.search?.trim(); 
+                                if (term) handleNavigate('list', { search: term }); 
+                            } 
+                        }} 
+                        className="w-full pl-16 sm:pl-24 pr-24 sm:pr-40 py-6 sm:py-8 bg-white border border-gray-200 rounded-full shadow-2xl shadow-emerald-50/50 focus:ring-4 focus:ring-emerald-100 focus:border-emerald-500 outline-none text-xl sm:text-2xl transition-all placeholder-gray-300" 
+                    />
+                    <button 
+                        onClick={() => { 
+                            const term = activeFilters.search?.trim(); 
+                            if (term) handleNavigate('list', { search: term }); 
+                        }} 
+                        className="absolute right-4 top-1/2 -translate-y-1/2 bg-emerald-600 text-white px-8 py-4 rounded-full font-bold hover:bg-emerald-700 transition-all hidden sm:block shadow-lg"
+                    >
+                        Search
+                    </button>
                 </div>
              </div>
           )}
