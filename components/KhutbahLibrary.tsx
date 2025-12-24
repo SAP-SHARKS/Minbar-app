@@ -1125,9 +1125,9 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     setView('imam-details');
   };
 
-  const incrementViews = async (khutbahId: string, currentViews: number) => {
+  const incrementViews = async (khutbahId: string) => {
     try {
-        await supabase.from('khutbahs').update({ view_count: (currentViews || 0) + 1 }).eq('id', khutbahId);
+        await supabase.rpc('increment_khutbah_views', { row_id: khutbahId });
     } catch (err) {
         console.error("View tracking error:", err);
     }
@@ -1142,13 +1142,11 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     }
 
     try {
-        const { data: current } = await supabase.from('khutbahs').select('likes_count').eq('id', khutbahId).single();
-        const nextLikes = (current?.likes_count || 0) + 1;
-        await supabase.from('khutbahs').update({ likes_count: nextLikes }).eq('id', khutbahId);
+        await supabase.rpc('increment_khutbah_likes', { row_id: khutbahId });
         
-        // Update local detail state if viewing this khutbah
+        // Optimistically update local detail state if viewing this khutbah
         if (detailData && detailData.id === khutbahId) {
-            setDetailData({ ...detailData, likes: nextLikes });
+            setDetailData({ ...detailData, likes: (detailData.likes || 0) + 1 });
         }
     } catch (err) {
         console.error("Like error:", err);
@@ -1210,7 +1208,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   topic: data.topic,
                   labels: data.tags,
                   likes: data.likes_count,
-                  view_count: data.view_count,
+                  view_count: (data.view_count || 0) + 1, // Optimistic UI
                   content: data.extracted_text || data.content,
                   style: data.topic,
                   date: data.created_at ? new Date(data.created_at).toLocaleDateString() : undefined,
@@ -1218,8 +1216,8 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   comments: [] 
               });
 
-              // Trigger view increment
-              incrementViews(data.id, data.view_count || 0);
+              // Trigger view increment via RPC as requested
+              await supabase.rpc('increment_khutbah_views', { row_id: preview.id });
 
               const { data: cardsData } = await supabase
                   .from('khutbah_cards')
