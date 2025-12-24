@@ -122,15 +122,16 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
 
     if (filters.search && filters.search.trim().length > 0) {
        const term = filters.search.trim();
-       // Using weighted full-text search as requested
+       // Final implementation: Weighted Search on fts_weighted column
        query = query.textSearch('fts_weighted', term, { config: 'english', type: 'websearch' });
     }
 
     if (filters.topic && filters.topic !== 'All') query = query.eq('topic', filters.topic);
     if (filters.imam) query = query.eq('author', filters.imam);
 
-    // Sorting Logic: Prioritize FTS relevance ranking if searching
+    // Sorting Logic
     if (filters.search) {
+       // Rank by relevance (fts_weighted tsvector ranking)
        query = query.order('fts_weighted', { ascending: false });
     } else if (filters.sort === 'trending') {
       query = query.order('likes_count', { ascending: false });

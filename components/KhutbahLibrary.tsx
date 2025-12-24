@@ -504,23 +504,20 @@ const ImamProfileView = ({
       <button onClick={onBack} className="mb-3 flex items-center text-gray-500 hover:text-teal-600 gap-2 font-medium">
         <ChevronLeft size={16} /> Back
       </button>
-
-      {/* Profile Header - Bio and Stats Restored as requested */}
+      
+      {/* Restored Bio and Stats Header */}
       <div className="bg-white rounded-3xl border border-gray-100 p-8 mb-10 shadow-sm">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
               <div className={`w-32 h-32 rounded-3xl flex items-center justify-center text-4xl font-bold shrink-0 shadow-lg ${getAvatarColor(imam.name)}`}>
                   {imam.avatar_url ? <img src={imam.avatar_url} alt={imam.name} className="w-full h-full object-cover rounded-3xl" /> : imam.name.charAt(0)}
               </div>
               <div className="flex-1 text-center md:text-left">
-                  <h1 className="text-4xl font-serif font-bold text-gray-900 mb-2">{imam.name}</h1>
-                  
-                  {/* Bio Restoration */}
-                  <p className="text-gray-600 mt-2 mb-4 leading-relaxed max-w-3xl">
-                      {imam.bio || 'Biography coming soon.'}
+                  <h1 className="text-3xl font-serif font-bold text-gray-900">{imam.name}</h1>
+                  <p className="text-gray-600 mt-2 leading-relaxed max-w-3xl line-clamp-3">
+                      {imam.bio || 'Scholarly biography coming soon.'}
                   </p>
-
-                  {/* Stats Row Restoration */}
-                  <div className="flex items-center justify-center md:justify-start gap-6 mb-6">
+                  
+                  <div className="flex items-center justify-center md:justify-start gap-6 mt-4">
                       <div className="flex flex-col">
                           <span className="text-2xl font-bold text-gray-900">{imam.khutbah_count || 0}</span>
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Khutbahs</span>
@@ -531,12 +528,12 @@ const ImamProfileView = ({
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Avg Rating</span>
                       </div>
                   </div>
-                  
+
                   <button 
                     onClick={() => onNavigateDetails(imam)} 
-                    className="bg-emerald-600 text-white px-8 py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
+                    className="text-emerald-600 font-bold hover:underline mt-6 flex items-center gap-2"
                   >
-                    View Full Profile
+                    View Full Profile <ChevronRight size={16} />
                   </button>
               </div>
           </div>
@@ -808,7 +805,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     try { 
         await supabase.rpc('increment_khutbah_views', { row_id: khutbahId }); 
         
-        // Manual local state sync for view counts across views
+        // Manual local state sync for view counts across views as requested
         const updateViews = (k: any) => k.id === khutbahId ? { ...k, view_count: (k.view_count || 0) + 1 } : k;
         
         if (homeData) {
