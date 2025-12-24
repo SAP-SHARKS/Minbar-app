@@ -2,11 +2,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileSpreadsheet, FileText, CheckCircle, AlertCircle, 
-  Loader2, UploadCloud, Plus, Check, User, ExternalLink, AlertTriangle, Info, Play, RefreshCw, Upload
+  Loader2, UploadCloud, Plus, Check, User, ExternalLink, AlertTriangle, Info, Play, RefreshCw, Upload,
+  Lock
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import * as XLSX from 'xlsx';
 import { Imam } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 interface KhutbahUploadProps {
   onSuccess: () => void;
@@ -54,6 +56,9 @@ const fetchApi = async (url: string, body: any, retries = 3, delay = 2000) => {
 // --- Excel Import Section ---
 
 const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.email === 'zaid.aiesec@gmail.com';
+  
   const [khutbahs, setKhutbahs] = useState<any[]>([]);
   const [imams, setImams] = useState<Imam[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -88,7 +93,6 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
       if (rawRows.length < 2) throw new Error('File is empty');
 
       const mapped = rawRows.slice(1).map((row, index) => {
-        // Deterministic Mapping: Col 0 = Index, Col 2 = Speaker, Col 3 = Topic, Col 6 = Tags
         const fileIndexRaw = row[0];
         const speakerRaw = String(row[2] || '').trim();
         const topicRaw = String(row[3] || '').trim();
@@ -122,6 +126,7 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
   }
 
   async function importToDatabase() {
+    if (!isAdmin) return;
     setIsImporting(true);
     let success = 0; let skipped = 0; let errors = 0;
 
@@ -138,7 +143,6 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
           continue;
         }
 
-        // Resolve Imam
         let { data: imam } = await supabase.from('imams').select('id').eq('name', item.author).maybeSingle();
         if (!imam) {
             const { data: newImam } = await supabase.from('imams').insert({ 
@@ -194,12 +198,23 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
               </tbody>
             </table>
           </div>
-          <div className="flex justify-end gap-3">
-             <button onClick={() => setShowPreview(false)} className="px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors">Cancel</button>
-             <button onClick={importToDatabase} disabled={isImporting} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold flex gap-2 shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all">
-                {isImporting ? <Loader2 className="animate-spin" size={20}/> : <UploadCloud size={20}/>}
-                Confirm Sync ({khutbahs.length})
-             </button>
+          <div className="flex flex-col items-end gap-3">
+             <div className="flex gap-3">
+                <button onClick={() => setShowPreview(false)} className="px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors">Cancel</button>
+                <button 
+                  onClick={importToDatabase} 
+                  disabled={isImporting || !isAdmin} 
+                  className={`bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold flex gap-2 shadow-lg transition-all ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'shadow-emerald-100 hover:bg-emerald-700'}`}
+                >
+                    {isImporting ? <Loader2 className="animate-spin" size={20}/> : <UploadCloud size={20}/>}
+                    Confirm Sync ({khutbahs.length})
+                </button>
+             </div>
+             {!isAdmin && (
+                <div className="flex items-center gap-1.5 text-red-500 font-bold text-xs uppercase tracking-wider">
+                  <Lock size={12}/> Admin Only: zaid.aiesec@gmail.com
+                </div>
+             )}
           </div>
         </div>
       )}
@@ -222,6 +237,9 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
 // --- PDF Processing Section ---
 
 const PdfUploadSection = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.email === 'zaid.aiesec@gmail.com';
+
   const [files, setFiles] = useState<any[]>([]);
   const [imams, setImams] = useState<Imam[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -284,6 +302,7 @@ const PdfUploadSection = () => {
   };
 
   async function processAllFiles() {
+    if (!isAdmin) return;
     setIsProcessing(true);
     for (let i = 0; i < files.length; i++) {
       if (files[i].status === 'done' || files[i].status === 'updated') continue;
@@ -299,11 +318,9 @@ const PdfUploadSection = () => {
         const item = files[i];
         if (!item.parsedIndex || !item.speakerKey) throw new Error("Invalid filename format. Expected: Index_Speaker_...pdf");
 
-        // 1. Resolve Imam
         const { data: imam } = await supabase.from('imams').select('id').eq('name', item.parsedSpeaker).maybeSingle();
         if (!imam) throw new Error(`Unrecognized imam: ${item.parsedSpeaker}`);
 
-        // 2. Matching logic
         const { data: match } = await supabase
           .from('khutbahs')
           .select('id, title')
@@ -311,7 +328,6 @@ const PdfUploadSection = () => {
           .eq('speaker_file_index', item.parsedIndex)
           .maybeSingle();
 
-        // 3. Extract Text
         const base64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string).split(',')[1]);
@@ -319,16 +335,13 @@ const PdfUploadSection = () => {
         });
         const { text: rawText } = await fetchApi('/api/extract-pdf', { base64, fileName: item.name });
 
-        // 4. Update or Insert
         let khutbahId;
         let action: 'updated' | 'done';
 
         if (match) {
           khutbahId = (match as any).id;
           action = 'updated';
-          console.log(`[PDF] Updating matched khutbah ${khutbahId} for ${item.name}`);
         } else {
-          console.log(`[PDF] No match for ${item.name}. Creating new row.`);
           const { data: newRow, error: insErr } = await supabase.from('khutbahs').insert({
             title: item.name.replace('.pdf', '').replace(/_/g, ' '),
             imam_id: imam.id,
@@ -342,7 +355,6 @@ const PdfUploadSection = () => {
           action = 'done';
         }
 
-        // 5. AI Formatting & Summary
         const formatData = await fetchApi('/api/process-khutbah', { 
             content: rawText, type: 'format', khutbahId: khutbahId 
         });
@@ -356,10 +368,8 @@ const PdfUploadSection = () => {
           return next;
         });
 
-        // Small delay between items
         await new Promise(r => setTimeout(r, 1000));
       } catch (err: any) {
-        console.error(`[PDF] Error processing ${files[i].name}:`, err);
         setFiles(prev => {
           const next = [...prev];
           next[i].status = 'failed';
@@ -414,12 +424,23 @@ const PdfUploadSection = () => {
               </tbody>
             </table>
           </div>
-          <div className="flex justify-end gap-3">
-             <button onClick={() => setFiles([])} disabled={isProcessing} className="px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors">Clear All</button>
-             <button onClick={processAllFiles} disabled={isProcessing || files.length === 0} className="bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all">
-                {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-                Start Processing
-             </button>
+          <div className="flex flex-col items-end gap-3">
+             <div className="flex gap-3">
+                <button onClick={() => setFiles([])} disabled={isProcessing} className="px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors">Clear All</button>
+                <button 
+                  onClick={processAllFiles} 
+                  disabled={isProcessing || files.length === 0 || !isAdmin} 
+                  className={`bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'shadow-emerald-100 hover:bg-emerald-700'}`}
+                >
+                    {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
+                    Start Processing
+                </button>
+             </div>
+             {!isAdmin && (
+                <div className="flex items-center gap-1.5 text-red-500 font-bold text-xs uppercase tracking-wider">
+                  <Lock size={12}/> Admin Only: zaid.aiesec@gmail.com
+                </div>
+             )}
           </div>
         </div>
       ) : (

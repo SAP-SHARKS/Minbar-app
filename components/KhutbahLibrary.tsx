@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, Play, FileText, ChevronLeft, Check, 
@@ -434,13 +435,13 @@ const ImamDetailedView = ({
       </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-8 min-w-0">
           <section className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
             <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
               <User size={24} className="text-teal-500" /> About {imam.name}
             </h2>
             <div className="prose prose-teal max-w-none text-gray-600 leading-relaxed space-y-4">
-              <p>{imam.bio}</p>
+              <p className="whitespace-pre-wrap">{imam.bio || 'No biography available.'}</p>
             </div>
           </section>
         </div>
@@ -805,7 +806,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     try { 
         await supabase.rpc('increment_khutbah_views', { row_id: khutbahId }); 
         
-        // Manual local state sync for view counts across views as requested
+        // Manual local state sync for view counts across views
         const updateViews = (k: any) => k.id === khutbahId ? { ...k, view_count: (k.view_count || 0) + 1 } : k;
         
         if (homeData) {
@@ -987,7 +988,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                           <span className="w-8 text-center font-bold text-gray-700">{contentFontSize}</span>
                           <button onClick={() => setContentFontSize(s => Math.min(40, s+2))} className="p-1 hover:bg-gray-100 rounded-full"><Plus size={16}/></button>
                       </div>
-                      {isInMyKhutbahs ? ( <div className="flex items-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-200 px-6 py-3 rounded-full font-bold shadow-sm"> <Check size={20} /> In My Khutbahs </div> ) : ( <button onClick={handleAddCopy} disabled={addingToMyKhutbahs} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-full hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 font-bold disabled:opacity-50" > {addingToMyKhutbahs ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} Add to My Khutbahs </button> )}
+                      {isInMyKhutbahs ? ( <div className="flex items-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-200 px-6 py-3 rounded-full font-bold shadow-sm"> <Check size={20} /> In My Khutbahs </div> ) : ( <button onClick={handleAddCopy} disabled={addingToMyKhutbahs} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-full hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 font-bold disabled:opacity-50" > {addingToMyKhutbahs ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} Add to My Khutbahs </button> )}
                       <button onClick={(e) => handleBookmark(e, detailData.id)} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyBookmarked ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}><BookmarkIcon size={20} fill={isCurrentlyBookmarked ? "currentColor" : "none"} />{isCurrentlyBookmarked ? 'Bookmarked' : 'Bookmark'}</button>
                       <button onClick={(e) => handleLike(e, detailData.id)} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyLiked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}><Heart size={20} fill={isCurrentlyLiked ? "currentColor" : "none"} />{detailData.likes || 0} Likes</button>
                   </div>

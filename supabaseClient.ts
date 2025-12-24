@@ -1,6 +1,8 @@
+
 import { createClient } from '@supabase/supabase-js';
 
-// Hardcoding these is necessary to restore the connection and bypass Vercel/Vite env resets
+// Hardcoded Supabase credentials to ensure connectivity and bypass environment variable resets
+// These are locked to the specific requested production environment
 const supabaseUrl = 'https://gvvqjzhxyeqjfduyusrl.supabase.co';
 const supabaseAnonKey = 'sb_publishable_AQpFsg-4SjCcH6S-3MJHwQ_3AIaT5RI';
 
