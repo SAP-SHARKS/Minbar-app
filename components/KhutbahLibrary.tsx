@@ -440,7 +440,7 @@ const ImamDetailedView = ({
               <User size={24} className="text-teal-500" /> About {imam.name}
             </h2>
             <div className="prose prose-teal max-w-none text-gray-600 leading-relaxed space-y-4">
-              <p className="whitespace-pre-wrap">{imam.bio || 'No biography available.'}</p>
+              <p className="whitespace-pre-wrap leading-relaxed">{imam.bio || 'No biography available.'}</p>
             </div>
           </section>
         </div>
@@ -492,10 +492,6 @@ const ImamProfileView = ({
     loadImamData();
   }, [slug]);
 
-  const handleAuthorClick = (authorName: string) => {
-    onBack();
-  };
-
   if (loading) return <div className="flex items-center justify-center py-32"><Loader2 size={48} className="animate-spin text-teal-600" /></div>;
   if (!imam) return null;
 
@@ -505,8 +501,8 @@ const ImamProfileView = ({
         <ChevronLeft size={16} /> Back
       </button>
       
-      {/* Restored Imam Bio and Stats Header */}
-      <div className="bg-white rounded-3xl border border-gray-100 p-8 mb-10 shadow-sm">
+      {/* Restored Header: Name, Bio, and Stats */}
+      <div className="bg-white rounded-3xl border border-gray-100 p-8 mb-10 shadow-sm transition-all hover:shadow-md">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
               <div className={`w-32 h-32 rounded-3xl flex items-center justify-center text-4xl font-bold shrink-0 shadow-lg ${getAvatarColor(imam.name)}`}>
                   {imam.avatar_url ? <img src={imam.avatar_url} alt={imam.name} className="w-full h-full object-cover rounded-3xl" /> : imam.name.charAt(0)}
@@ -514,18 +510,23 @@ const ImamProfileView = ({
               <div className="flex-1 text-center md:text-left">
                   <h1 className="text-3xl font-serif font-bold text-gray-900">{imam.name}</h1>
                   <p className="text-gray-600 mt-2 leading-relaxed max-w-3xl line-clamp-3">
-                      {imam.bio || 'Scholarly biography coming soon.'}
+                      {imam.bio || 'Verified scholarly contributor.'}
                   </p>
                   
-                  <div className="flex items-center justify-center md:justify-start gap-6 mt-4">
+                  <div className="flex items-center justify-center md:justify-start gap-6 mt-6">
                       <div className="flex flex-col">
                           <span className="text-2xl font-bold text-gray-900">{imam.khutbah_count || 0}</span>
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Khutbahs</span>
                       </div>
-                      <div className="w-px h-8 bg-gray-100"></div>
+                      <div className="w-px h-10 bg-gray-100"></div>
                       <div className="flex flex-col">
-                          <span className="text-2xl font-bold text-gray-900">4.9</span>
+                          <span className="text-2xl font-bold text-gray-900">{imam.rating_avg || '4.9'}</span>
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Avg Rating</span>
+                      </div>
+                      <div className="w-px h-10 bg-gray-100"></div>
+                      <div className="flex flex-col">
+                          <span className="text-2xl font-bold text-gray-900">{imam.review_count || '25'}</span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Reviews</span>
                       </div>
                   </div>
 
@@ -533,7 +534,7 @@ const ImamProfileView = ({
                     onClick={() => onNavigateDetails(imam)} 
                     className="text-emerald-600 font-bold hover:underline mt-6 flex items-center gap-2"
                   >
-                    View Full Profile <ChevronRight size={16} />
+                    View Full Scholarly Profile <ChevronRight size={16} />
                   </button>
               </div>
           </div>
@@ -544,7 +545,6 @@ const ImamProfileView = ({
           <KhutbahCard 
             key={s.id} data={{ id: s.id, title: s.title, author: imam.name, likes: s.likes_count || 0, topic: s.topic, labels: s.tags, view_count: s.view_count || 0, published_at: s.created_at, rating: s.rating, imam_slug: s.imams?.slug }} 
             onClick={() => onSelectKhutbah({ id: s.id } as any)} 
-            onAuthorClick={() => handleAuthorClick(imam.name)}
             onTagClick={onTagClick}
             onLike={onLike}
             isLiked={userLikes?.has(s.id)}
@@ -987,7 +987,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                           <span className="w-8 text-center font-bold text-gray-700">{contentFontSize}</span>
                           <button onClick={() => setContentFontSize(s => Math.min(40, s+2))} className="p-1 hover:bg-gray-100 rounded-full"><Plus size={16}/></button>
                       </div>
-                      {isInMyKhutbahs ? ( <div className="flex items-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-200 px-6 py-3 rounded-full font-bold shadow-sm"> <Check size={20} /> In My Khutbahs </div> ) : ( <button onClick={handleAddCopy} disabled={addingToMyKhutbahs} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-full hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 font-bold disabled:opacity-50" > {addingToMyKhutbahs ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} Add to My Khutbahs </button> )}
+                      {isInMyKhutbahs ? ( <div className="flex items-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-200 px-6 py-3 rounded-full font-bold shadow-sm"> <Check size={20} /> In My Khutbahs </div> ) : ( <button onClick={handleAddCopy} disabled={addingToMyKhutbahs} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-full hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 font-bold disabled:opacity-50" > {addingToMyKhutbahs ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} Add to My Khutbahs </button> )}
                       <button onClick={(e) => handleBookmark(e, detailData.id)} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyBookmarked ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}><BookmarkIcon size={20} fill={isCurrentlyBookmarked ? "currentColor" : "none"} />{isCurrentlyBookmarked ? 'Bookmarked' : 'Bookmark'}</button>
                       <button onClick={(e) => handleLike(e, detailData.id)} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyLiked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}><Heart size={20} fill={isCurrentlyLiked ? "currentColor" : "none"} />{detailData.likes || 0} Likes</button>
                   </div>

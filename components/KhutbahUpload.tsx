@@ -125,8 +125,9 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
   }
 
   async function importToDatabase() {
-    // Strict Admin Email Check
-    if (user?.email !== 'zaid.aiesec@gmail.com') {
+    // Explicit Admin Check
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser?.email !== 'zaid.aiesec@gmail.com') {
       alert("Unauthorized Access: Only zaid.aiesec@gmail.com can perform database syncs.");
       return;
     }
@@ -314,9 +315,10 @@ const PdfUploadSection = () => {
   };
 
   async function processAllFiles() {
-    // Strict Admin Email Authorization Check
-    if (user?.email !== 'zaid.aiesec@gmail.com') {
-      alert("Unauthorized: Only zaid.aiesec@gmail.com can process PDF content and update the extracted_text column.");
+    // Explicit Admin Check
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser?.email !== 'zaid.aiesec@gmail.com') {
+      alert("Unauthorized: Access restricted to zaid.aiesec@gmail.com");
       return;
     }
     
@@ -333,10 +335,10 @@ const PdfUploadSection = () => {
 
       try {
         const item = files[i];
-        if (!item.parsedIndex || !item.speakerKey) throw new Error("Invalid filename format. Expected: Index_Speaker_...pdf");
+        if (!item.parsedIndex || !item.speakerKey) throw new Error("Invalid format: 12_Name_...pdf");
 
         const { data: imam } = await supabase.from('imams').select('id').eq('name', item.parsedSpeaker).maybeSingle();
-        if (!imam) throw new Error(`Unrecognized imam: ${item.parsedSpeaker}. Check spelling in Excel/Imams table.`);
+        if (!imam) throw new Error(`Unknown Imam: ${item.parsedSpeaker}`);
 
         const { data: match } = await supabase
           .from('khutbahs')
@@ -345,20 +347,18 @@ const PdfUploadSection = () => {
           .eq('speaker_file_index', item.parsedIndex)
           .maybeSingle();
 
-        // 1. EXTRACT
         const base64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string).split(',')[1]);
           reader.readAsDataURL(item.file);
         });
+        
         const { text: rawText } = await fetchApi('/api/extract-pdf', { base64, fileName: item.name });
 
-        // 2. SANITIZE (Fixing 400 error: remove illegal chars and limit payload size)
-        setFiles(prev => { const n = [...prev]; n[i].status = 'sanitizing'; return n; });
+        // SANITIZE & LIMIT Content (Fix 400 error)
         const sanitizedContent = (rawText || '')
-            .trim()
-            .replace(/[^\x20-\x7E\s\u0600-\u06FF]/g, '') // Keep basic ASCII, whitespace, and Arabic
-            .substring(0, 50000); // Strict limit to ensure payload fits in 400/500 limits
+            .replace(/[^\x20-\x7E\s\u0600-\u06FF]/g, '')
+            .substring(0, 45000); 
 
         let khutbahId;
         let action: 'updated' | 'done';
@@ -367,7 +367,6 @@ const PdfUploadSection = () => {
           khutbahId = (match as any).id;
           action = 'updated';
         } else {
-          // If no match found, create a placeholder record
           const { data: newRow, error: insErr } = await supabase.from('khutbahs').insert({
             title: item.name.replace('.pdf', '').replace(/_/g, ' '),
             imam_id: imam.id,
@@ -381,12 +380,12 @@ const PdfUploadSection = () => {
           action = 'done';
         }
 
-        // 3. AI FORMAT (HTML Sanitization for extracted_text)
+        // Process AI Formatting
         const formatData = await fetchApi('/api/process-khutbah', { 
             content: sanitizedContent, type: 'format', khutbahId: khutbahId 
         });
         
-        // 4. AI CARDS (Generate summary cards and insert)
+        // Generate Cards
         await fetchApi('/api/process-khutbah', { 
             content: formatData.result, type: 'cards', khutbahId: khutbahId 
         });
@@ -397,14 +396,13 @@ const PdfUploadSection = () => {
           return next;
         });
 
-        // Delay to avoid hammering Gemini/Supabase
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise(r => setTimeout(r, 1200));
       } catch (err: any) {
-        console.error(`Error processing file ${files[i].name}:`, err);
+        console.error(`Error processing ${files[i].name}:`, err);
         setFiles(prev => {
           const next = [...prev];
           next[i].status = 'failed';
-          next[i].error = err.message || "Unknown error";
+          next[i].error = err.message || "400/403 Error";
           return next;
         });
       }
@@ -417,7 +415,7 @@ const PdfUploadSection = () => {
       <div className="mb-8 flex justify-between items-end">
          <div>
             <h2 className="text-xl font-bold text-gray-900">Attach PDFs to Excel Records</h2>
-            <p className="text-gray-500 text-sm">Matching by: Imam ID + Speaker File Index</p>
+            <p className="text-gray-500 text-sm">Target: zaid.aiesec@gmail.com authorized processing</p>
          </div>
          {isAdmin && files.length > 0 && (
            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold hover:bg-emerald-100 transition-all border border-emerald-100">
@@ -426,7 +424,7 @@ const PdfUploadSection = () => {
          )}
          {!isAdmin && (
            <div className="bg-red-50 text-red-600 px-4 py-2 rounded-xl border border-red-100 flex items-center gap-2 text-sm font-bold">
-             <ShieldAlert size={18}/> Restricted to Admin Access
+             <ShieldAlert size={18}/> Restricted Access
            </div>
          )}
       </div>
@@ -451,9 +449,9 @@ const PdfUploadSection = () => {
                     <td className="p-4">
                       {item.status === 'processing' && <span className="text-blue-500 font-bold animate-pulse flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> EXTRACTING</span>}
                       {item.status === 'sanitizing' && <span className="text-purple-500 font-bold animate-pulse flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> SANITIZING</span>}
-                      {item.status === 'updated' && <span className="text-emerald-600 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded w-fit"><Check size={14}/> UPDATED ROW</span>}
-                      {item.status === 'done' && <span className="text-blue-600 font-bold flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded w-fit"><Plus size={14}/> CREATED NEW</span>}
-                      {item.status === 'failed' && <span className="text-red-500 font-bold flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded w-fit" title={item.error}><AlertCircle size={14}/> FAILED</span>}
+                      {item.status === 'updated' && <span className="text-emerald-600 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded w-fit"><Check size={14}/> UPDATED</span>}
+                      {item.status === 'done' && <span className="text-blue-600 font-bold flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded w-fit"><Plus size={14}/> CREATED</span>}
+                      {item.status === 'failed' && <span className="text-red-500 font-bold flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded w-fit" title={item.error}><AlertCircle size={14}/> ERROR</span>}
                       {item.status === 'queued' && <span className="text-gray-400 font-bold uppercase text-[10px] bg-gray-100 px-2 py-0.5 rounded w-fit">Queued</span>}
                     </td>
                   </tr>
@@ -470,12 +468,12 @@ const PdfUploadSection = () => {
                   className={`bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'shadow-emerald-100 hover:bg-emerald-700'}`}
                 >
                     {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-                    {isAdmin ? 'Start Processing' : 'Restricted to Admin Access'}
+                    {isAdmin ? 'Start Batch Processing' : 'Admin Only Access'}
                 </button>
              </div>
              {!isAdmin && (
                 <div className="flex items-center gap-1.5 text-red-500 font-bold text-xs uppercase tracking-wider">
-                  <Lock size={12}/> Authorized: zaid.aiesec@gmail.com only
+                  <Lock size={12}/> Authorized Admin: zaid.aiesec@gmail.com
                 </div>
              )}
           </div>
@@ -498,13 +496,8 @@ const PdfUploadSection = () => {
                 <Upload size={32} />
               </div>
               <p className="text-gray-900 text-xl font-bold mb-2">Drop PDFs here or click to browse</p>
-              <p className="text-gray-400 font-medium">Standard naming: <code className="bg-gray-200/50 px-1.5 py-0.5 rounded text-gray-600 font-mono text-xs">12_Hamza Yusuf_...pdf</code></p>
-              {!isAdmin && <p className="text-red-500 font-black mt-4 uppercase text-xs tracking-widest"><Lock className="inline mr-1" size={12}/> Admin Restricted</p>}
-              {isDragging && (
-                  <div className="mt-4 inline-block px-4 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full animate-bounce">
-                    Ready to drop!
-                  </div>
-              )}
+              <p className="text-gray-400 font-medium">Expected format: <code className="bg-gray-200/50 px-1.5 py-0.5 rounded text-gray-600 font-mono text-xs">12_Hamza Yusuf_...pdf</code></p>
+              {!isAdmin && <p className="text-red-500 font-black mt-4 uppercase text-xs tracking-widest"><Lock className="inline mr-1" size={12}/> Admin Only Mode</p>}
           </div>
       )}
     </div>
@@ -520,7 +513,7 @@ export const KhutbahUpload: React.FC<KhutbahUploadProps> = ({ onSuccess }) => {
          <div className="w-full">
             <div className="mb-8">
               <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Sync Manager</h2>
-              <p className="text-gray-500 mt-2 text-lg">Batch PDF parsing and Excel data deduplication.</p>
+              <p className="text-gray-500 mt-2 text-lg">Admin portal for metadata and file synchronization.</p>
             </div>
 
             <div className="flex p-1 bg-gray-200/60 rounded-2xl w-fit mb-10 border border-gray-200">
