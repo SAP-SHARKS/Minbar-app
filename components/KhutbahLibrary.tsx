@@ -4,7 +4,7 @@ import {
   MapPin, Star, Heart, MessageCircle, Send, Loader2, AlertCircle,
   Minus, Plus, Type, ChevronRight, TrendingUp, Grid, User,
   BookOpen, Moon, Sun, Users, Activity, Bookmark, LayoutList, Sparkles,
-  Calendar, Shield, CheckCircle, ArrowLeft, Filter, ArrowRight
+  Calendar, Shield, CheckCircle, ArrowLeft, Filter, ArrowRight, Bookmark as BookmarkIcon
 } from 'lucide-react';
 import { AUTHORS_DATA } from '../constants';
 import { Khutbah, KhutbahPreview, AuthorData, Imam, Topic } from '../types';
@@ -647,6 +647,7 @@ const ImamProfileView = ({
         if (sermonError) throw sermonError;
         setSermons(sermonData || []);
 
+        // Use real-time count from khutbahs table
         const { count, error: countError } = await supabase
           .from('khutbahs')
           .select('*', { count: 'exact', head: true })
@@ -1038,10 +1039,10 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const [detailData, setDetailData] = useState<Khutbah | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [contentFontSize, setContentFontSize] = useState(18);
-  const [isInMyMyKhutbahs, setIsInMyKhutbahs] = useState(false);
+  const [isInMyKhutbahs, setIsInMyKhutbahs] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
   const [addingToMyKhutbahs, setAddingToMyKhutbahs] = useState(false);
   const [khutbahCards, setKhutbahCards] = useState<any[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
   
   const { user: authUser, requireAuth } = useAuth(); 
 
@@ -1073,6 +1074,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       setView('detail');
       setDetailLoading(true);
       setIsInMyKhutbahs(false);
+      setIsBookmarked(false);
       setKhutbahCards([]);
       
       try {
@@ -1107,6 +1109,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
 
               const currentUser = authUser || user;
               if (currentUser) {
+                  // Check if in my khutbahs
                   const { data: userData } = await supabase
                     .from('user_khutbahs')
                     .select('id')
@@ -1115,6 +1118,16 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                     .maybeSingle();
                   
                   if (userData) setIsInMyKhutbahs(true);
+
+                  // Check if bookmarked
+                  const { data: bookmarkData } = await supabase
+                    .from('user_bookmarks')
+                    .select('id')
+                    .eq('user_id', currentUser.id)
+                    .eq('source_khutbah_id', data.id)
+                    .maybeSingle();
+                  
+                  if (bookmarkData) setIsBookmarked(true);
               }
           }
       } catch (err) {
@@ -1122,6 +1135,93 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       } finally {
           setDetailLoading(false);
       }
+  };
+
+  const handleAddCopy = async () => {
+    const currentUser = authUser || user;
+    if (!currentUser) {
+      requireAuth('Sign in to save this khutbah to your personal library.', () => {});
+      return;
+    }
+    
+    if (!detailData) return;
+    setAddingToMyKhutbahs(true);
+
+    try {
+        const userId = currentUser.id;
+        
+        // 1. Create User Khutbah Copy
+        const { data: userKhutbah, error: headerError } = await supabase
+          .from('user_khutbahs')
+          .insert({
+              user_id: userId,
+              source_khutbah_id: detailData.id,
+              title: detailData.title,
+              author: detailData.author,
+              content: detailData.content || '',
+          })
+          .select()
+          .single();
+
+        if (headerError) throw headerError;
+
+        // 2. Map original cards to user cards
+        if (khutbahCards && khutbahCards.length > 0) {
+            const userCards = khutbahCards.map(c => ({
+                user_khutbah_id: userKhutbah.id,
+                card_number: c.card_number,
+                section_label: c.section_label,
+                title: c.title,
+                bullet_points: c.bullet_points,
+                arabic_text: c.arabic_text,
+                key_quote: c.key_quote,
+                quote_source: c.quote_source,
+                transition_text: c.transition_text,
+                time_estimate_seconds: c.time_estimate_seconds,
+                notes: c.notes
+            }));
+
+            const { error: cardsError } = await supabase
+              .from('user_khutbah_cards')
+              .insert(userCards);
+              
+            if (cardsError) throw cardsError;
+        }
+
+        setIsInMyKhutbahs(true);
+        if (onAddToMyKhutbahs) onAddToMyKhutbahs(userKhutbah.id);
+
+    } catch (err: any) {
+        console.error("Error copying khutbah:", err);
+        alert(`Failed to add to My Khutbahs: ${err.message}`);
+    } finally {
+        setAddingToMyKhutbahs(false);
+    }
+  };
+
+  const handleBookmark = async () => {
+    const currentUser = authUser || user;
+    if (!currentUser) {
+        requireAuth('Sign in to bookmark this sermon.', () => {});
+        return;
+    }
+    if (!detailData) return;
+    
+    try {
+        if (isBookmarked) {
+            await supabase.from('user_bookmarks')
+                .delete()
+                .eq('user_id', currentUser.id)
+                .eq('source_khutbah_id', detailData.id);
+            setIsBookmarked(false);
+        } else {
+            await supabase.from('user_bookmarks')
+                .insert({ user_id: currentUser.id, source_khutbah_id: detailData.id });
+            setIsBookmarked(true);
+        }
+    } catch (err) {
+        console.error("Bookmark error:", err);
+    }
   };
 
   if (view === 'imams-list') {
@@ -1198,37 +1298,110 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
             <div className="flex-1 overflow-y-auto">
             <div className="page-container py-8 xl:py-12">
                 <button onClick={() => setView('home')} className="mb-8 flex items-center text-gray-500 hover:text-emerald-600 gap-2 font-medium text-lg"><ChevronLeft size={24} /> Back to Library</button>
+                
                 <div className="flex flex-col xl:flex-row justify-between items-start mb-10 gap-6">
-                <div>
-                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-gray-900 mb-4">{detailData.title}</h1>
-                    <div className="flex wrap items-center gap-4 text-lg text-gray-600">
-                    <span 
-                      onClick={() => handleSelectImam(detailData.author.toLowerCase().replace(/\s+/g, '-'))}
-                      className="font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg cursor-pointer hover:underline"
-                    >
-                      {detailData.author}
-                    </span>
-                    <span>•</span>
-                    <span 
-                      onClick={() => handleSelectTopic(detailData.topic.toLowerCase().replace(/\s+/g, '-'))}
-                      className="cursor-pointer hover:underline"
-                    >
-                      {detailData.topic}
-                    </span>
-                    {detailData.date && <><span>•</span><span>{detailData.date}</span></>}
-                    </div>
-                </div>
+                  <div>
+                      <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-gray-900 mb-4">{detailData.title}</h1>
+                      <div className="flex wrap items-center gap-4 text-lg text-gray-600">
+                      <span 
+                        onClick={() => handleSelectImam(detailData.author.toLowerCase().replace(/\s+/g, '-'))}
+                        className="font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg cursor-pointer hover:underline"
+                      >
+                        {detailData.author}
+                      </span>
+                      <span>•</span>
+                      <span 
+                        onClick={() => handleSelectTopic(detailData.topic.toLowerCase().replace(/\s+/g, '-'))}
+                        className="cursor-pointer hover:underline"
+                      >
+                        {detailData.topic}
+                      </span>
+                      {detailData.date && <><span>•</span><span>{detailData.date}</span></>}
+                      </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-2 shadow-sm">
+                          <Type size={18} className="text-gray-400" />
+                          <button onClick={() => setContentFontSize(s => Math.max(12, s-2))} className="p-1 hover:bg-gray-100 rounded-full"><Minus size={16}/></button>
+                          <span className="w-8 text-center font-bold text-gray-700">{contentFontSize}</span>
+                          <button onClick={() => setContentFontSize(s => Math.min(40, s+2))} className="p-1 hover:bg-gray-100 rounded-full"><Plus size={16}/></button>
+                      </div>
+
+                      {isInMyKhutbahs ? (
+                          <div className="flex items-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-200 px-6 py-3 rounded-full font-bold shadow-sm">
+                              <Check size={20} /> In My Khutbahs
+                          </div>
+                      ) : (
+                          <button 
+                              onClick={handleAddCopy}
+                              disabled={addingToMyKhutbahs}
+                              className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-full hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 font-bold disabled:opacity-50"
+                          >
+                              {addingToMyKhutbahs ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
+                              Add to My Khutbahs
+                          </button>
+                      )}
+
+                      <button 
+                        onClick={handleBookmark}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isBookmarked ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+                      >
+                        <BookmarkIcon size={20} fill={isBookmarked ? "currentColor" : "none"} />
+                        {isBookmarked ? 'Bookmarked' : 'Bookmark'}
+                      </button>
+                  </div>
                 </div>
                 
-                <div className="flex flex-col lg:flex-row gap-8">
-                    <div className="flex-1 min-w-0">
-                        <div className="bg-white rounded-lg p-8 shadow-sm border border-gray-100 w-full overflow-hidden">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Main Content */}
+                    <div className="lg:col-span-2 min-w-0">
+                        <div className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-gray-100 w-full overflow-hidden min-h-[600px]">
                             <div 
-                                className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed break-words"
+                                className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-p:leading-relaxed break-words font-serif"
                                 style={{ fontSize: `${contentFontSize}px` }}
                                 dangerouslySetInnerHTML={{ __html: detailData.content || '' }}
                             />
                         </div>
+                    </div>
+
+                    {/* Summary Cards Sidebar */}
+                    <div className="lg:col-span-1">
+                      <div className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm sticky top-6">
+                        <div className="flex items-center gap-2 mb-6">
+                          <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600">
+                             <LayoutList size={20} />
+                          </div>
+                          <h3 className="font-bold text-gray-900 text-xl tracking-tight">Summary Cards</h3>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          {khutbahCards.length > 0 ? khutbahCards.map((card, idx) => (
+                            <div key={card.id} className="p-5 rounded-2xl bg-gray-50/50 border border-gray-100 hover:border-emerald-200 transition-colors">
+                               <div className="flex justify-between items-start mb-3">
+                                 <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${getSectionColor(card.section_label)}`}>
+                                   {card.section_label}
+                                 </span>
+                                 <span className="text-[10px] font-bold text-gray-400">CARD {idx + 1}</span>
+                               </div>
+                               <h4 className="font-bold text-gray-800 mb-3">{card.title}</h4>
+                               <ul className="space-y-2">
+                                  {card.bullet_points?.slice(0, 3).map((pt: string, i: number) => (
+                                    <li key={i} className="flex gap-2 text-sm text-gray-600 leading-relaxed">
+                                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 mt-1.5" />
+                                       <span className="line-clamp-2">{pt}</span>
+                                    </li>
+                                  ))}
+                               </ul>
+                            </div>
+                          )) : (
+                            <div className="text-center py-10 text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                              <Loader2 size={24} className="mx-auto mb-2 opacity-20" />
+                              <p className="text-sm font-medium">No summary cards available</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                 </div>
             </div>
