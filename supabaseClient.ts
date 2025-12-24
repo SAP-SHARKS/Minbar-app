@@ -1,6 +1,8 @@
+
 import { createClient } from '@supabase/supabase-js';
 
-// Hardcoded Supabase credentials to restore connectivity and bypass environment resets
+// Hardcoded Supabase credentials to restore connectivity and bypass environment resets.
+// This ensures the app maintains a stable connection and resolves [ENV] URL undefined errors.
 const supabaseUrl = 'https://gvvqjzhxyeqjfduyusrl.supabase.co';
 const supabaseAnonKey = 'sb_publishable_AQpFsg-4SjCcH6S-3MJHwQ_3AIaT5RI';
 

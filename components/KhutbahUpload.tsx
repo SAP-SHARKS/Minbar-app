@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileSpreadsheet, FileText, CheckCircle, AlertCircle, 
@@ -125,10 +126,10 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
   }
 
   async function importToDatabase() {
-    // Explicit Admin Check
+    // Explicit Auth Check for Admin
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (authUser?.email !== 'zaid.aiesec@gmail.com') {
-      alert("Unauthorized Access: Only zaid.aiesec@gmail.com can perform database syncs.");
+      alert("Unauthorized: Access restricted to zaid.aiesec@gmail.com");
       return;
     }
     
@@ -220,12 +221,12 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
                   className={`bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold flex gap-2 shadow-lg transition-all ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'shadow-emerald-100 hover:bg-emerald-700'}`}
                 >
                     {isImporting ? <Loader2 className="animate-spin" size={20}/> : <UploadCloud size={20}/>}
-                    {isAdmin ? `Confirm Sync (${khutbahs.length})` : 'Admin Access Required'}
+                    {isAdmin ? `Confirm Sync (${khutbahs.length})` : 'Restricted Access'}
                 </button>
              </div>
              {!isAdmin && (
                 <div className="flex items-center gap-1.5 text-red-500 font-bold text-xs uppercase tracking-wider">
-                  <Lock size={12}/> Authorized only for zaid.aiesec@gmail.com
+                  <Lock size={12}/> Admin Authorization Required (zaid.aiesec@gmail.com)
                 </div>
              )}
           </div>
@@ -315,10 +316,10 @@ const PdfUploadSection = () => {
   };
 
   async function processAllFiles() {
-    // Explicit Admin Check
+    // Explicit Auth Check
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (authUser?.email !== 'zaid.aiesec@gmail.com') {
-      alert("Unauthorized: Access restricted to zaid.aiesec@gmail.com");
+      alert("Unauthorized Access: Only zaid.aiesec@gmail.com can batch process PDFs.");
       return;
     }
     
@@ -335,10 +336,10 @@ const PdfUploadSection = () => {
 
       try {
         const item = files[i];
-        if (!item.parsedIndex || !item.speakerKey) throw new Error("Invalid format: 12_Name_...pdf");
+        if (!item.parsedIndex || !item.speakerKey) throw new Error("Invalid filename format.");
 
         const { data: imam } = await supabase.from('imams').select('id').eq('name', item.parsedSpeaker).maybeSingle();
-        if (!imam) throw new Error(`Unknown Imam: ${item.parsedSpeaker}`);
+        if (!imam) throw new Error(`Imam '${item.parsedSpeaker}' not in database.`);
 
         const { data: match } = await supabase
           .from('khutbahs')
@@ -355,10 +356,11 @@ const PdfUploadSection = () => {
         
         const { text: rawText } = await fetchApi('/api/extract-pdf', { base64, fileName: item.name });
 
-        // SANITIZE & LIMIT Content (Fix 400 error)
+        // SANITIZE & TRUNCATE (Fix 400 error)
         const sanitizedContent = (rawText || '')
-            .replace(/[^\x20-\x7E\s\u0600-\u06FF]/g, '')
-            .substring(0, 45000); 
+            .trim()
+            .replace(/[^\x20-\x7E\s\u0600-\u06FF]/g, '') // Keep basic chars + Arabic
+            .substring(0, 40000); // Strict size limit for API safety
 
         let khutbahId;
         let action: 'updated' | 'done';
@@ -380,12 +382,12 @@ const PdfUploadSection = () => {
           action = 'done';
         }
 
-        // Process AI Formatting
+        // 1. AI Format into Semantic HTML
         const formatData = await fetchApi('/api/process-khutbah', { 
             content: sanitizedContent, type: 'format', khutbahId: khutbahId 
         });
         
-        // Generate Cards
+        // 2. AI Generate Summary Cards
         await fetchApi('/api/process-khutbah', { 
             content: formatData.result, type: 'cards', khutbahId: khutbahId 
         });
@@ -396,13 +398,14 @@ const PdfUploadSection = () => {
           return next;
         });
 
-        await new Promise(r => setTimeout(r, 1200));
+        // Delay to prevent rate limits
+        await new Promise(r => setTimeout(r, 1500));
       } catch (err: any) {
-        console.error(`Error processing ${files[i].name}:`, err);
+        console.error(`Processing error: ${files[i].name}`, err);
         setFiles(prev => {
           const next = [...prev];
           next[i].status = 'failed';
-          next[i].error = err.message || "400/403 Error";
+          next[i].error = err.message || "Failed";
           return next;
         });
       }
@@ -414,18 +417,19 @@ const PdfUploadSection = () => {
     <div className="p-8">
       <div className="mb-8 flex justify-between items-end">
          <div>
-            <h2 className="text-xl font-bold text-gray-900">Attach PDFs to Excel Records</h2>
-            <p className="text-gray-500 text-sm">Target: zaid.aiesec@gmail.com authorized processing</p>
+            <h2 className="text-xl font-bold text-gray-900">Batch PDF Processor</h2>
+            <p className="text-gray-500 text-sm">Target: Semantic HTML extraction & card generation.</p>
          </div>
-         {isAdmin && files.length > 0 && (
-           <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold hover:bg-emerald-100 transition-all border border-emerald-100">
-              <Plus size={18}/> Add More
-           </button>
-         )}
-         {!isAdmin && (
-           <div className="bg-red-50 text-red-600 px-4 py-2 rounded-xl border border-red-100 flex items-center gap-2 text-sm font-bold">
-             <ShieldAlert size={18}/> Restricted Access
-           </div>
+         {isAdmin ? (
+           files.length > 0 && (
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold hover:bg-emerald-100 transition-all border border-emerald-100">
+               <Plus size={18}/> Add More
+            </button>
+           )
+         ) : (
+          <div className="bg-red-50 text-red-600 px-4 py-2 rounded-xl border border-red-100 flex items-center gap-2 text-sm font-bold">
+            <ShieldAlert size={18}/> Restricted Admin Portal
+          </div>
          )}
       </div>
 
@@ -436,7 +440,7 @@ const PdfUploadSection = () => {
           <div className="overflow-x-auto border border-gray-200 rounded-2xl bg-white mb-6 max-h-[500px] shadow-sm">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b sticky top-0 z-10">
-                <tr><th className="p-4 text-left font-bold text-gray-400 uppercase text-[10px] tracking-wider">Filename</th><th className="p-4 text-left font-bold text-gray-400 uppercase text-[10px] tracking-wider">Match Info</th><th className="p-4 text-left font-bold text-gray-400 uppercase text-[10px] tracking-wider">Status</th></tr>
+                <tr><th className="p-4 text-left font-bold text-gray-400 uppercase text-[10px] tracking-wider">Filename</th><th className="p-4 text-left font-bold text-gray-400 uppercase text-[10px] tracking-wider">Info</th><th className="p-4 text-left font-bold text-gray-400 uppercase text-[10px] tracking-wider">Status</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {files.map((item, i) => (
@@ -448,10 +452,10 @@ const PdfUploadSection = () => {
                     </td>
                     <td className="p-4">
                       {item.status === 'processing' && <span className="text-blue-500 font-bold animate-pulse flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> EXTRACTING</span>}
-                      {item.status === 'sanitizing' && <span className="text-purple-500 font-bold animate-pulse flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> SANITIZING</span>}
-                      {item.status === 'updated' && <span className="text-emerald-600 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded w-fit"><Check size={14}/> UPDATED</span>}
+                      {item.status === 'sanitizing' && <span className="text-purple-500 font-bold animate-pulse flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> FORMATTING</span>}
+                      {item.status === 'updated' && <span className="text-emerald-600 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded w-fit"><Check size={14}/> SUCCESS</span>}
                       {item.status === 'done' && <span className="text-blue-600 font-bold flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded w-fit"><Plus size={14}/> CREATED</span>}
-                      {item.status === 'failed' && <span className="text-red-500 font-bold flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded w-fit" title={item.error}><AlertCircle size={14}/> ERROR</span>}
+                      {item.status === 'failed' && <span className="text-red-500 font-bold flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded w-fit" title={item.error}><AlertCircle size={14}/> FAILED</span>}
                       {item.status === 'queued' && <span className="text-gray-400 font-bold uppercase text-[10px] bg-gray-100 px-2 py-0.5 rounded w-fit">Queued</span>}
                     </td>
                   </tr>
@@ -495,9 +499,9 @@ const PdfUploadSection = () => {
               <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 transition-all shadow-sm ${isDragging ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-600 group-hover:scale-110'}`}>
                 <Upload size={32} />
               </div>
-              <p className="text-gray-900 text-xl font-bold mb-2">Drop PDFs here or click to browse</p>
-              <p className="text-gray-400 font-medium">Expected format: <code className="bg-gray-200/50 px-1.5 py-0.5 rounded text-gray-600 font-mono text-xs">12_Hamza Yusuf_...pdf</code></p>
-              {!isAdmin && <p className="text-red-500 font-black mt-4 uppercase text-xs tracking-widest"><Lock className="inline mr-1" size={12}/> Admin Only Mode</p>}
+              <p className="text-gray-900 text-xl font-bold mb-2">Drop PDF Sermons Here</p>
+              <p className="text-gray-400 font-medium">Auto-matching by Index & Name (e.g., 45_Omar_Suleiman.pdf)</p>
+              {!isAdmin && <p className="text-red-500 font-black mt-6 uppercase text-xs tracking-widest"><Lock className="inline mr-1" size={12}/> Access Denied</p>}
           </div>
       )}
     </div>
@@ -512,13 +516,13 @@ export const KhutbahUpload: React.FC<KhutbahUploadProps> = ({ onSuccess }) => {
       <div className="page-container py-8 xl:py-12">
          <div className="w-full">
             <div className="mb-8">
-              <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Sync Manager</h2>
-              <p className="text-gray-500 mt-2 text-lg">Admin portal for metadata and file synchronization.</p>
+              <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Library Sync Manager</h2>
+              <p className="text-gray-500 mt-2 text-lg">Admin portal for khutbah metadata sync and rich HTML processing.</p>
             </div>
 
             <div className="flex p-1 bg-gray-200/60 rounded-2xl w-fit mb-10 border border-gray-200">
-                <button onClick={() => setMode('excel')} className={`px-8 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mode === 'excel' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500'}`}><FileSpreadsheet size={18}/> Phase 1: Excel</button>
-                <button onClick={() => setMode('pdf')} className={`px-8 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mode === 'pdf' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500'}`}><FileText size={18}/> Phase 2: PDF</button>
+                <button onClick={() => setMode('excel')} className={`px-8 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mode === 'excel' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500'}`}><FileSpreadsheet size={18}/> Phase 1: Metadata Sync</button>
+                <button onClick={() => setMode('pdf')} className={`px-8 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mode === 'pdf' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500'}`}><FileText size={18}/> Phase 2: PDF Processing</button>
             </div>
 
             <div className="bg-white rounded-[2.5rem] border border-gray-200 shadow-xl shadow-gray-200/50 overflow-hidden min-h-[500px] mb-12">
