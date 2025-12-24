@@ -98,14 +98,27 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
     }
   };
 
+  const handleBookmarkClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onBookmark?.(e, data.id);
+  };
+
+  const handleLikeClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onLike?.(e, data.id);
+  };
+
   const tagHoverClasses = "hover:bg-gray-900 hover:text-white hover:underline transition-all duration-200";
 
   return (
-    <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 h-full flex flex-col relative overflow-hidden">
+    <div 
+      onClick={onClick}
+      className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 h-full flex flex-col relative overflow-hidden cursor-pointer"
+    >
       
       {/* Top Left Bookmark */}
       <button 
-        onClick={(e) => onBookmark?.(e, data.id)}
+        onClick={handleBookmarkClick}
         className={`absolute top-4 left-4 z-10 p-2 rounded-full transition-all ${isBookmarked ? 'bg-amber-100 text-amber-600 shadow-sm' : 'bg-gray-50/50 text-gray-400 hover:text-amber-500 hover:bg-white'}`}
       >
         <BookmarkIcon size={18} fill={isBookmarked ? "currentColor" : "none"} />
@@ -143,7 +156,7 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
         )}
       </div>
       
-      <h3 onClick={onClick} className="text-xl font-bold text-gray-900 mb-3 group-hover:text-emerald-700 transition-colors line-clamp-2 leading-tight cursor-pointer">
+      <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-emerald-700 transition-colors line-clamp-2 leading-tight">
           {data.title}
       </h3>
       
@@ -160,7 +173,7 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
       <div className="pt-5 border-t border-gray-50 mt-5 flex items-center justify-between">
          <div className="flex items-center gap-4">
              <button 
-                onClick={(e) => onLike?.(e, data.id)}
+                onClick={handleLikeClick}
                 className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-red-500 transition-colors"
              >
                  <Heart size={14} className="text-gray-400 group-hover:text-red-500 transition-colors" /> 
@@ -381,7 +394,7 @@ const TopicPageView = ({
             labels: item.tags,
             likes: item.likes_count,
             comments_count: item.comments_count,
-            view_count: item.view_count,
+            view_count: item.view_count || 0,
             published_at: item.created_at,
             rating: typeof item.rating === 'number' ? item.rating : parseFloat(item.rating || '4.8'),
             imam_slug: item.imams?.slug
@@ -1187,6 +1200,9 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   };
 
   const handleSelectKhutbah = async (preview: KhutbahPreview) => {
+      // Trigger view increment immediately
+      await incrementViews(preview.id);
+      
       setSelectedKhutbahId(preview.id);
       setView('detail');
       setDetailLoading(true);
@@ -1215,9 +1231,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   file_url: data.file_url,
                   comments: [] 
               });
-
-              // Trigger view increment via RPC as requested
-              await supabase.rpc('increment_khutbah_views', { row_id: preview.id });
 
               const { data: cardsData } = await supabase
                   .from('khutbah_cards')

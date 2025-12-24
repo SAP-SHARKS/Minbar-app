@@ -17,13 +17,12 @@ export function useHomepageData() {
     const fetchData = async () => {
       try {
         // Step 1: Initial parallel fetch
-        // Topics: Explicitly selecting columns and ordering by count descending
-        // Imams: Selected to be counted dynamically in Step 2
+        // Added view_count to all khutbah selections
         const [latestRes, trendingRes, classicsRes, topicsRes, imamsRes] = await Promise.all([
           supabase
             .from('khutbahs')
             .select(`
-              id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+              id, title, author, topic, tags, likes_count, comments_count, view_count, created_at, rating,
               imams ( slug )
             `)
             .order('created_at', { ascending: false })
@@ -31,7 +30,7 @@ export function useHomepageData() {
           supabase
             .from('khutbahs')
             .select(`
-              id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+              id, title, author, topic, tags, likes_count, comments_count, view_count, created_at, rating,
               imams ( slug )
             `)
             .order('likes_count', { ascending: false })
@@ -39,7 +38,7 @@ export function useHomepageData() {
           supabase
             .from('khutbahs')
             .select(`
-              id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+              id, title, author, topic, tags, likes_count, comments_count, view_count, created_at, rating,
               imams ( slug )
             `)
             .gt('likes_count', 10)
@@ -59,8 +58,6 @@ export function useHomepageData() {
         const rawTopics = topicsRes.data || [];
         const rawImams = imamsRes.data || [];
 
-        // Step 2: Real-time counts for Imams (confirmed working by user)
-        // We calculate Imam counts dynamically against the khutbahs table
         const imamCounts = await Promise.all(
           rawImams.map(i => 
             supabase.from('khutbahs').select('*', { count: 'exact', head: true }).eq('author', i.name)
@@ -75,6 +72,7 @@ export function useHomepageData() {
             labels: item.tags,
             likes: item.likes_count,
             comments_count: item.comments_count,
+            view_count: item.view_count || 0,
             published_at: item.created_at,
             rating: typeof item.rating === 'number' ? item.rating : parseFloat(item.rating || '4.8'),
             imam_slug: item.imams?.slug
@@ -85,7 +83,7 @@ export function useHomepageData() {
           trending: (trendingRes.data || []).map(mapKhutbah),
           classics: (classicsRes.data || []).map(mapKhutbah),
           featured: (trendingRes.data || []).slice(0, 3).map(mapKhutbah),
-          topics: rawTopics, // Relying on the static khutbah_count column for topics as requested
+          topics: rawTopics,
           imams: rawImams.map((i, idx) => ({
             ...i,
             khutbah_count: imamCounts[idx].count ?? 0
@@ -119,7 +117,7 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
     let query = supabase
       .from('khutbahs')
       .select(`
-        id, title, author, topic, tags, likes_count, comments_count, created_at, rating,
+        id, title, author, topic, tags, likes_count, comments_count, view_count, created_at, rating,
         imams ( slug )
       `, { count: 'exact' });
 
@@ -152,6 +150,7 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
             labels: item.tags,
             likes: item.likes_count,
             comments_count: item.comments_count,
+            view_count: item.view_count || 0,
             published_at: item.created_at,
             rating: typeof item.rating === 'number' ? item.rating : parseFloat(item.rating || '4.8'),
             imam_slug: item.imams?.slug
