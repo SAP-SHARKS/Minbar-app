@@ -505,7 +505,7 @@ const ImamProfileView = ({
         <ChevronLeft size={16} /> Back
       </button>
       
-      {/* Bio and Stats Header Restored */}
+      {/* Restored Imam Bio and Stats Header */}
       <div className="bg-white rounded-3xl border border-gray-100 p-8 mb-10 shadow-sm">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
               <div className={`w-32 h-32 rounded-3xl flex items-center justify-center text-4xl font-bold shrink-0 shadow-lg ${getAvatarColor(imam.name)}`}>
@@ -987,7 +987,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                           <span className="w-8 text-center font-bold text-gray-700">{contentFontSize}</span>
                           <button onClick={() => setContentFontSize(s => Math.min(40, s+2))} className="p-1 hover:bg-gray-100 rounded-full"><Plus size={16}/></button>
                       </div>
-                      {isInMyKhutbahs ? ( <div className="flex items-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-200 px-6 py-3 rounded-full font-bold shadow-sm"> <Check size={20} /> In My Khutbahs </div> ) : ( <button onClick={handleAddCopy} disabled={addingToMyKhutbahs} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-full hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 font-bold disabled:opacity-50" > {addingToMyKhutbahs ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} Add to My Khutbahs </button> )}
+                      {isInMyKhutbahs ? ( <div className="flex items-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-200 px-6 py-3 rounded-full font-bold shadow-sm"> <Check size={20} /> In My Khutbahs </div> ) : ( <button onClick={handleAddCopy} disabled={addingToMyKhutbahs} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-full hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 font-bold disabled:opacity-50" > {addingToMyKhutbahs ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />} Add to My Khutbahs </button> )}
                       <button onClick={(e) => handleBookmark(e, detailData.id)} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyBookmarked ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}><BookmarkIcon size={20} fill={isCurrentlyBookmarked ? "currentColor" : "none"} />{isCurrentlyBookmarked ? 'Bookmarked' : 'Bookmark'}</button>
                       <button onClick={(e) => handleLike(e, detailData.id)} className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold transition-all border shadow-sm ${isCurrentlyLiked ? 'bg-red-50 text-red-600 border-red-200' : 'bg-white text-gray-700 border-gray-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}><Heart size={20} fill={isCurrentlyLiked ? "currentColor" : "none"} />{detailData.likes || 0} Likes</button>
                   </div>

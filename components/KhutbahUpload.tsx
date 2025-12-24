@@ -41,8 +41,8 @@ const fetchApi = async (url: string, body: any, retries = 3, delay = 2000) => {
       }
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || `Server Error (${response.status})`);
+        const data = await response.json().catch(() => ({ error: `Server Error (${response.status})` }));
+        throw new Error(data.error || `Request failed with status ${response.status}`);
       }
       return await response.json();
     } catch (err: any) {
@@ -125,9 +125,9 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
   }
 
   async function importToDatabase() {
-    // Immediate return if not authorized user
+    // Strict Admin Email Check
     if (user?.email !== 'zaid.aiesec@gmail.com') {
-      alert("Unauthorized: Only zaid.aiesec@gmail.com can sync database metadata.");
+      alert("Unauthorized Access: Only zaid.aiesec@gmail.com can perform database syncs.");
       return;
     }
     
@@ -284,7 +284,7 @@ const PdfUploadSection = () => {
         parsedIndex: parsed.index,
         parsedSpeaker: parsed.speaker,
         speakerKey: parsed.speaker ? normalizeSpeaker(parsed.speaker) : null,
-        status: 'queued' as 'queued' | 'processing' | 'done' | 'failed' | 'updated',
+        status: 'queued' as 'queued' | 'processing' | 'done' | 'failed' | 'updated' | 'sanitizing',
         error: null as string | null
       };
     });
@@ -314,9 +314,9 @@ const PdfUploadSection = () => {
   };
 
   async function processAllFiles() {
-    // Strict Email Authorization Check
+    // Strict Admin Email Authorization Check
     if (user?.email !== 'zaid.aiesec@gmail.com') {
-      alert("Unauthorized: Only zaid.aiesec@gmail.com can process PDF content.");
+      alert("Unauthorized: Only zaid.aiesec@gmail.com can process PDF content and update the extracted_text column.");
       return;
     }
     
@@ -336,7 +336,7 @@ const PdfUploadSection = () => {
         if (!item.parsedIndex || !item.speakerKey) throw new Error("Invalid filename format. Expected: Index_Speaker_...pdf");
 
         const { data: imam } = await supabase.from('imams').select('id').eq('name', item.parsedSpeaker).maybeSingle();
-        if (!imam) throw new Error(`Unrecognized imam: ${item.parsedSpeaker}`);
+        if (!imam) throw new Error(`Unrecognized imam: ${item.parsedSpeaker}. Check spelling in Excel/Imams table.`);
 
         const { data: match } = await supabase
           .from('khutbahs')
@@ -345,6 +345,7 @@ const PdfUploadSection = () => {
           .eq('speaker_file_index', item.parsedIndex)
           .maybeSingle();
 
+        // 1. EXTRACT
         const base64 = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve((reader.result as string).split(',')[1]);
@@ -352,8 +353,12 @@ const PdfUploadSection = () => {
         });
         const { text: rawText } = await fetchApi('/api/extract-pdf', { base64, fileName: item.name });
 
-        // Sanitization and size limiting to prevent 400 Bad Request
-        const sanitizedContent = (rawText || '').trim().substring(0, 100000); 
+        // 2. SANITIZE (Fixing 400 error: remove illegal chars and limit payload size)
+        setFiles(prev => { const n = [...prev]; n[i].status = 'sanitizing'; return n; });
+        const sanitizedContent = (rawText || '')
+            .trim()
+            .replace(/[^\x20-\x7E\s\u0600-\u06FF]/g, '') // Keep basic ASCII, whitespace, and Arabic
+            .substring(0, 50000); // Strict limit to ensure payload fits in 400/500 limits
 
         let khutbahId;
         let action: 'updated' | 'done';
@@ -362,6 +367,7 @@ const PdfUploadSection = () => {
           khutbahId = (match as any).id;
           action = 'updated';
         } else {
+          // If no match found, create a placeholder record
           const { data: newRow, error: insErr } = await supabase.from('khutbahs').insert({
             title: item.name.replace('.pdf', '').replace(/_/g, ' '),
             imam_id: imam.id,
@@ -375,9 +381,12 @@ const PdfUploadSection = () => {
           action = 'done';
         }
 
+        // 3. AI FORMAT (HTML Sanitization for extracted_text)
         const formatData = await fetchApi('/api/process-khutbah', { 
             content: sanitizedContent, type: 'format', khutbahId: khutbahId 
         });
+        
+        // 4. AI CARDS (Generate summary cards and insert)
         await fetchApi('/api/process-khutbah', { 
             content: formatData.result, type: 'cards', khutbahId: khutbahId 
         });
@@ -388,12 +397,14 @@ const PdfUploadSection = () => {
           return next;
         });
 
-        await new Promise(r => setTimeout(r, 1000));
+        // Delay to avoid hammering Gemini/Supabase
+        await new Promise(r => setTimeout(r, 1500));
       } catch (err: any) {
+        console.error(`Error processing file ${files[i].name}:`, err);
         setFiles(prev => {
           const next = [...prev];
           next[i].status = 'failed';
-          next[i].error = err.message;
+          next[i].error = err.message || "Unknown error";
           return next;
         });
       }
@@ -438,7 +449,8 @@ const PdfUploadSection = () => {
                       <div className="text-xs font-bold text-gray-700">{item.parsedSpeaker || 'Unknown'}</div>
                     </td>
                     <td className="p-4">
-                      {item.status === 'processing' && <span className="text-blue-500 font-bold animate-pulse flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> PROCESSING</span>}
+                      {item.status === 'processing' && <span className="text-blue-500 font-bold animate-pulse flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> EXTRACTING</span>}
+                      {item.status === 'sanitizing' && <span className="text-purple-500 font-bold animate-pulse flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> SANITIZING</span>}
                       {item.status === 'updated' && <span className="text-emerald-600 font-bold flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded w-fit"><Check size={14}/> UPDATED ROW</span>}
                       {item.status === 'done' && <span className="text-blue-600 font-bold flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded w-fit"><Plus size={14}/> CREATED NEW</span>}
                       {item.status === 'failed' && <span className="text-red-500 font-bold flex items-center gap-1 bg-red-50 px-2 py-0.5 rounded w-fit" title={item.error}><AlertCircle size={14}/> FAILED</span>}
@@ -458,12 +470,12 @@ const PdfUploadSection = () => {
                   className={`bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'shadow-emerald-100 hover:bg-emerald-700'}`}
                 >
                     {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-                    {isAdmin ? 'Start Processing' : 'Admin Only'}
+                    {isAdmin ? 'Start Processing' : 'Restricted to Admin Access'}
                 </button>
              </div>
              {!isAdmin && (
                 <div className="flex items-center gap-1.5 text-red-500 font-bold text-xs uppercase tracking-wider">
-                  <Lock size={12}/> Restricted to Admin: zaid.aiesec@gmail.com
+                  <Lock size={12}/> Authorized: zaid.aiesec@gmail.com only
                 </div>
              )}
           </div>
@@ -487,7 +499,7 @@ const PdfUploadSection = () => {
               </div>
               <p className="text-gray-900 text-xl font-bold mb-2">Drop PDFs here or click to browse</p>
               <p className="text-gray-400 font-medium">Standard naming: <code className="bg-gray-200/50 px-1.5 py-0.5 rounded text-gray-600 font-mono text-xs">12_Hamza Yusuf_...pdf</code></p>
-              {!isAdmin && <p className="text-red-500 font-black mt-4 uppercase text-xs tracking-widest"><Lock className="inline mr-1" size={12}/> Restricted Mode</p>}
+              {!isAdmin && <p className="text-red-500 font-black mt-4 uppercase text-xs tracking-widest"><Lock className="inline mr-1" size={12}/> Admin Restricted</p>}
               {isDragging && (
                   <div className="mt-4 inline-block px-4 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full animate-bounce">
                     Ready to drop!
@@ -508,7 +520,7 @@ export const KhutbahUpload: React.FC<KhutbahUploadProps> = ({ onSuccess }) => {
          <div className="w-full">
             <div className="mb-8">
               <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Sync Manager</h2>
-              <p className="text-gray-500 mt-2 text-lg">Admin portal for metadata syncing and PDF processing.</p>
+              <p className="text-gray-500 mt-2 text-lg">Batch PDF parsing and Excel data deduplication.</p>
             </div>
 
             <div className="flex p-1 bg-gray-200/60 rounded-2xl w-fit mb-10 border border-gray-200">
