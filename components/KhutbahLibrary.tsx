@@ -1100,7 +1100,11 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const [userBookmarks, setUserBookmarks] = useState<Set<string>>(new Set());
   const [addingToMyKhutbahs, setAddingToMyKhutbahs] = useState(false);
   const [khutbahCards, setKhutbahCards] = useState<any[]>([]);
+  
+  // Comment State
   const [comments, setComments] = useState<any[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   
   const { user: authUser, requireAuth } = useAuth(); 
 
@@ -1199,6 +1203,38 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     }
   };
 
+  const handlePostComment = async () => {
+    if (!commentText.trim() || !detailData) return;
+    
+    requireAuth('Sign in to post a comment.', async () => {
+      const currentUser = authUser || user;
+      if (!currentUser || !detailData) return;
+      
+      setIsSubmittingComment(true);
+      try {
+        const { data, error } = await supabase
+          .from('khutbah_comments')
+          .insert({
+            khutbah_id: detailData.id,
+            user_id: currentUser.id,
+            comment_text: commentText.trim()
+          })
+          .select()
+          .single();
+          
+        if (error) throw error;
+        
+        setComments(prev => [data, ...prev]);
+        setCommentText('');
+      } catch (err: any) {
+        console.error("Comment error:", err);
+        alert("Failed to post comment: " + err.message);
+      } finally {
+        setIsSubmittingComment(false);
+      }
+    });
+  };
+
   const handleSelectKhutbah = async (preview: KhutbahPreview) => {
       // Trigger view increment immediately
       await incrementViews(preview.id);
@@ -1208,6 +1244,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       setDetailLoading(true);
       setIsInMyKhutbahs(false);
       setKhutbahCards([]);
+      setCommentText('');
       
       try {
           const { data, error } = await supabase
@@ -1240,7 +1277,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
 
               if (cardsData) setKhutbahCards(cardsData);
 
-              // Fetch comments
+              // Fetch comments for this khutbah
               const { data: comms } = await supabase
                 .from('khutbah_comments')
                 .select('*')
@@ -1491,11 +1528,19 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                            
                            <div className="mb-10">
                               <textarea 
+                                value={commentText}
+                                onChange={(e) => setCommentText(e.target.value)}
                                 placeholder="Add a comment or ask a question..."
                                 className="w-full p-6 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all resize-none h-32"
                               />
                               <div className="flex justify-end mt-4">
-                                <button className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-md">Post Comment</button>
+                                <button 
+                                  onClick={handlePostComment}
+                                  disabled={isSubmittingComment || !commentText.trim()}
+                                  className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-md disabled:opacity-50"
+                                >
+                                  {isSubmittingComment ? <Loader2 size={20} className="animate-spin" /> : "Post Comment"}
+                                </button>
                               </div>
                            </div>
 
