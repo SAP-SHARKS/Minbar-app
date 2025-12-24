@@ -94,6 +94,8 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
     }
   };
 
+  const tagHoverClasses = "hover:bg-gray-900 hover:text-white hover:underline transition-all duration-200";
+
   return (
     <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 group hover:-translate-y-1 h-full flex flex-col relative overflow-hidden">
       
@@ -111,7 +113,7 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
                 e.stopPropagation();
                 if (onTagClick) onTagClick(label.toLowerCase().trim().replace(/\s+/g, '-'));
               }}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:brightness-95 transition-all ${getTagStyles(label)}`}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer ${tagHoverClasses} ${getTagStyles(label)}`}
             >
                 {label}
             </span>
@@ -122,7 +124,7 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({ data, onClick, onAuthorClick,
                 e.stopPropagation();
                 if (onTagClick) onTagClick(data.topic?.toLowerCase().trim().replace(/\s+/g, '-') || '');
               }}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer hover:brightness-95 transition-all ${getTagStyles(data.topic)}`}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer ${tagHoverClasses} ${getTagStyles(data.topic)}`}
             >
                 {data.topic}
             </span>
@@ -185,8 +187,8 @@ interface ImamCardProps {
 }
 
 const ImamCard: React.FC<ImamCardProps> = ({ name, count, avatar_url, onClick }) => (
-    <div onClick={onClick} className="flex-shrink-0 w-40 bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all group mr-4">
-        <div className="w-20 h-20 bg-gray-100 rounded-full mx-auto mb-3 overflow-hidden border-2 border-transparent group-hover:border-emerald-200 transition-colors">
+    <div onClick={onClick} className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md cursor-pointer transition-all group flex flex-col items-center h-full">
+        <div className="w-20 h-20 bg-gray-100 rounded-full mb-3 overflow-hidden border-2 border-transparent group-hover:border-emerald-200 transition-colors shrink-0">
             {avatar_url ? (
                 <img src={avatar_url} alt={name} className="w-full h-full object-cover" />
             ) : (
@@ -195,12 +197,106 @@ const ImamCard: React.FC<ImamCardProps> = ({ name, count, avatar_url, onClick })
                 </div>
             )}
         </div>
-        <div className="text-center">
+        <div className="text-center w-full min-w-0">
             <h4 className="font-bold text-sm text-gray-900 truncate mb-1">{name}</h4>
-            {count !== undefined && <span className="text-[10px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full">{count} Khutbahs</span>}
+            {count !== undefined && <span className="text-[10px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded-full whitespace-nowrap">{count} Khutbahs</span>}
         </div>
     </div>
 );
+
+// --- New Imams List View Component ---
+
+const ImamsListView = ({ 
+  onBack,
+  onSelectImam
+}: { 
+  onBack: () => void;
+  onSelectImam: (slug: string) => void;
+}) => {
+  const [imams, setImams] = useState<Imam[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    async function fetchAllImams() {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('imams')
+          .select('*')
+          .order('khutbah_count', { ascending: false });
+        
+        if (data) setImams(data);
+      } catch (err) {
+        console.error("Error fetching imams list:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAllImams();
+  }, []);
+
+  const filteredImams = useMemo(() => {
+    if (!searchQuery.trim()) return imams;
+    const lowerQuery = searchQuery.toLowerCase().trim();
+    return imams.filter(i => i.name.toLowerCase().includes(lowerQuery));
+  }, [imams, searchQuery]);
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center py-32">
+      <Loader2 size={48} className="animate-spin text-emerald-600 mb-4" />
+      <p className="text-emerald-800 font-bold uppercase tracking-widest">Finding Scholars...</p>
+    </div>
+  );
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full pb-32">
+      <button onClick={onBack} className="mb-8 flex items-center text-gray-500 hover:text-emerald-600 gap-2 font-medium">
+        <ArrowLeft size={18} /> Back to Library
+      </button>
+
+      <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-12">
+        <div>
+          <h1 className="text-5xl md:text-6xl font-serif font-bold text-gray-900 mb-4">
+            Our <span className="text-emerald-600">Imams</span>
+          </h1>
+          <p className="text-gray-500 text-xl">Browse our directory of verified scholars and speakers.</p>
+        </div>
+        
+        <div className="relative w-full md:w-96">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <input 
+                type="text" 
+                placeholder={`Search imams by name...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-6 py-4 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-emerald-500 outline-none text-lg transition-all"
+            />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+        {filteredImams.map(imam => (
+          <div key={imam.id} className="h-full">
+            <ImamCard 
+              name={imam.name} 
+              count={imam.khutbah_count} 
+              avatar_url={imam.avatar_url} 
+              onClick={() => onSelectImam(imam.slug)} 
+            />
+          </div>
+        ))}
+      </div>
+
+      {filteredImams.length === 0 && (
+        <div className="bg-white rounded-[2.5rem] border-2 border-dashed border-gray-100 p-20 text-center">
+           <User size={64} className="mx-auto mb-4 text-gray-200" />
+           <p className="text-gray-400 font-bold text-xl">No scholars found matching your search.</p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // --- Topic Page View Component ---
 
@@ -228,7 +324,6 @@ const TopicPageView = ({
       setLoading(true);
       setError(null);
       try {
-        // STEP A: Fetch the tag object. Use .ilike for case-insensitive slug lookup
         const { data: tagDataArray, error: tagError } = await supabase
           .from('tags')
           .select('id, name, slug')
@@ -239,7 +334,6 @@ const TopicPageView = ({
         
         const tagData = tagDataArray?.[0];
         if (!tagData) {
-            // Tag not found, display empty state gracefully
             setTagInfo({ name: slug, slug: slug });
             setAllKhutbahs([]);
             setLoading(false);
@@ -248,8 +342,6 @@ const TopicPageView = ({
         
         setTagInfo(tagData);
 
-        // COMBINED STEP B & C: Fetch khutbahs directly using a join (!inner)
-        // This is much more efficient than using .in() with a potentially massive list of IDs
         const { data: khutbahData, error: khutbahError } = await supabase
           .from('khutbahs')
           .select(`
@@ -456,7 +548,7 @@ const ImamDetailedView = ({
                       </div>
                       <div className="flex gap-0.5 text-amber-400">
                         {[...Array(5)].map((_, i) => (
-                          <Star key={i} size={14} fill={i < review.rating ? "currentColor" : "none"} className={i < review.rating ? "" : "text-gray-200"} />
+                          <Star key={i} size={14} fill="currentColor" />
                         ))}
                       </div>
                     </div>
@@ -558,7 +650,7 @@ const ImamProfileView = ({
         const { count, error: countError } = await supabase
           .from('khutbahs')
           .select('*', { count: 'exact', head: true })
-          .eq('imam_id', imamData.id);
+          .eq('author', imamData.name);
         
         if (!countError) {
           setRealtimeCount(count || 0);
@@ -625,7 +717,7 @@ const ImamProfileView = ({
             <div className="flex items-center gap-5 text-gray-600">
               <div className="flex items-center gap-1.5">
                 <BookOpen size={14} className="text-teal-500" />
-                <span className="text-sm font-bold text-gray-900">{realtimeCount || imam.khutbah_count || 0}</span>
+                <span className="text-sm font-bold text-gray-900">{realtimeCount || 0}</span>
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Sermons</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -798,14 +890,18 @@ const HomeView = ({
                         <h2 className="text-2xl font-bold text-gray-900">Popular Imams</h2>
                         <p className="text-gray-500 text-sm mt-1">Learned scholars and speakers</p>
                     </div>
-                    <button onClick={() => onNavigate('list', {})} className="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">View All <ChevronRight size={14}/></button>
+                    <button onClick={() => onNavigate('imams-list')} className="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">View All <ChevronRight size={14}/></button>
                 </div>
                 <div className="flex overflow-x-auto pb-6 -mx-2 px-2 custom-scrollbar">
                     {data.imams.length > 0 ? data.imams.map(i => (
-                        <ImamCard key={i.id} name={i.name} count={i.khutbah_count} avatar_url={i.avatar_url} onClick={() => onSelectImam(i.slug)} />
+                        <div key={i.id} className="flex-shrink-0 w-40 mr-4">
+                           <ImamCard name={i.name} count={i.khutbah_count} avatar_url={i.avatar_url} onClick={() => onSelectImam(i.slug)} />
+                        </div>
                     )) : (
                         ['Mufti Menk', 'Omar Suleiman', 'Nouman Ali Khan', 'Yasir Qadhi', 'Hamza Yusuf', 'Suhaib Webb'].map(i => (
-                            <ImamCard key={i} name={i} onClick={() => {}} />
+                            <div key={i} className="flex-shrink-0 w-40 mr-4">
+                                <ImamCard name={i} onClick={() => {}} />
+                            </div>
                         ))
                     )}
                 </div>
@@ -874,7 +970,6 @@ const ListView = ({
                     <p className="text-gray-500 mt-1">{count} results found</p>
                 </div>
                 <div className="flex gap-3 items-center">
-                    {/* Refine Search inside ListView */}
                     <div className="relative w-full sm:w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                         <input 
@@ -882,6 +977,12 @@ const ListView = ({
                             placeholder="Refine search..." 
                             value={filters.search || ''} 
                             onChange={(e) => setFilters({...filters, search: e.target.value})}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    const term = filters.search?.trim();
+                                    if (term) setFilters({...filters, search: term});
+                                }
+                            }}
                             className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 text-sm shadow-sm transition-all"
                         />
                     </div>
@@ -927,7 +1028,7 @@ const ListView = ({
 };
 
 export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, onStartLive, onAddToMyKhutbahs }) => {
-  const [view, setView] = useState<'home' | 'list' | 'detail' | 'imam-profile' | 'imam-details' | 'topic-page'>('home');
+  const [view, setView] = useState<'home' | 'list' | 'detail' | 'imam-profile' | 'imam-details' | 'topic-page' | 'imams-list'>('home');
   const [activeFilters, setActiveFilters] = useState<{ topic?: string, imam?: string, sort?: string, search?: string }>({});
   const [selectedKhutbahId, setSelectedKhutbahId] = useState<string | null>(null);
   const [selectedImamSlug, setSelectedImamSlug] = useState<string | null>(null);
@@ -945,7 +1046,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const { user: authUser, requireAuth } = useAuth(); 
 
   const handleNavigate = (newView: any, filters: any = {}) => {
-      // Ensure all navigation search params are trimmed
       const sanitizedFilters = { ...filters };
       if (sanitizedFilters.search) sanitizedFilters.search = sanitizedFilters.search.trim();
       
@@ -1024,6 +1124,21 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       }
   };
 
+  if (view === 'imams-list') {
+      return (
+        <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
+            <div className="flex-1 overflow-y-auto">
+                <div className="page-container py-8 xl:py-12">
+                   <ImamsListView 
+                      onBack={() => setView('home')} 
+                      onSelectImam={handleSelectImam}
+                   />
+                </div>
+            </div>
+        </div>
+      );
+  }
+
   if (view === 'topic-page' && selectedTopicSlug) {
       return (
         <div className="flex h-screen md:pl-20 bg-white overflow-hidden">
@@ -1086,7 +1201,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                 <div className="flex flex-col xl:flex-row justify-between items-start mb-10 gap-6">
                 <div>
                     <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-bold text-gray-900 mb-4">{detailData.title}</h1>
-                    <div className="flex flex-wrap items-center gap-4 text-lg text-gray-600">
+                    <div className="flex wrap items-center gap-4 text-lg text-gray-600">
                     <span 
                       onClick={() => handleSelectImam(detailData.author.toLowerCase().replace(/\s+/g, '-'))}
                       className="font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg cursor-pointer hover:underline"

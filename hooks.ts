@@ -16,7 +16,10 @@ export function useHomepageData() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [latest, trending, classics, topics, imams] = await Promise.all([
+        // Step 1: Initial parallel fetch
+        // Topics: Explicitly selecting columns and ordering by count descending
+        // Imams: Selected to be counted dynamically in Step 2
+        const [latestRes, trendingRes, classicsRes, topicsRes, imamsRes] = await Promise.all([
           supabase
             .from('khutbahs')
             .select(`
@@ -43,15 +46,26 @@ export function useHomepageData() {
             .limit(6),
           supabase
             .from('topics')
-            .select('*')
+            .select('id, name, slug, khutbah_count')
             .order('khutbah_count', { ascending: false })
-            .limit(12),
+            .limit(25),
           supabase
             .from('imams')
             .select('*')
             .order('khutbah_count', { ascending: false })
             .limit(15),
         ]);
+
+        const rawTopics = topicsRes.data || [];
+        const rawImams = imamsRes.data || [];
+
+        // Step 2: Real-time counts for Imams (confirmed working by user)
+        // We calculate Imam counts dynamically against the khutbahs table
+        const imamCounts = await Promise.all(
+          rawImams.map(i => 
+            supabase.from('khutbahs').select('*', { count: 'exact', head: true }).eq('author', i.name)
+          )
+        );
 
         const mapKhutbah = (item: any): KhutbahPreview => ({
             id: item.id,
@@ -67,12 +81,15 @@ export function useHomepageData() {
         });
 
         setData({
-          latest: (latest.data || []).map(mapKhutbah),
-          trending: (trending.data || []).map(mapKhutbah),
-          classics: (classics.data || []).map(mapKhutbah),
-          featured: (trending.data || []).slice(0, 3).map(mapKhutbah),
-          topics: (topics.data || []),
-          imams: (imams.data || []),
+          latest: (latestRes.data || []).map(mapKhutbah),
+          trending: (trendingRes.data || []).map(mapKhutbah),
+          classics: (classicsRes.data || []).map(mapKhutbah),
+          featured: (trendingRes.data || []).slice(0, 3).map(mapKhutbah),
+          topics: rawTopics, // Relying on the static khutbah_count column for topics as requested
+          imams: rawImams.map((i, idx) => ({
+            ...i,
+            khutbah_count: imamCounts[idx].count ?? 0
+          })).sort((a, b) => b.khutbah_count - a.khutbah_count),
         });
       } catch (error) {
         console.error("Error loading homepage data:", error);
@@ -106,8 +123,6 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
         imams ( slug )
       `, { count: 'exact' });
 
-    // QUERY GUARD: Only apply the 'or' filter if search term is non-empty after trimming
-    // This prevents 400 Bad Request errors from Supabase on invalid or empty or() parameters
     if (filters.search && filters.search.trim().length > 0) {
        const term = filters.search.trim();
        query = query.or(`title.ilike.%${term}%,author.ilike.%${term}%`);
@@ -146,8 +161,6 @@ export function usePaginatedKhutbahs(filters: { topic?: string; imam?: string; s
         setCount(totalCount || 0);
         setPage(pageNum);
         setHasMore(results.length === PAGE_SIZE);
-    } else if (error) {
-        console.error("[usePaginatedKhutbahs] Query error:", error);
     }
     
     setIsLoading(false);
