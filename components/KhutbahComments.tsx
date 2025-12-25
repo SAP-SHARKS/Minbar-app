@@ -14,7 +14,7 @@ interface Comment {
   content: string;
   created_at: string;
   user_id: string;
-  profiles: Profile | Profile[] | null;
+  user_profile?: Profile | null;
 }
 
 interface KhutbahCommentsProps {
@@ -39,28 +39,44 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
     setLoading(true);
     setError(null);
     try {
-      // Correct join syntax using the relationship name/column alias
-      const { data, error: sbError } = await supabase
+      // Fetch comments first - bypasses join relationship errors if foreign keys are tricky
+      const { data: commentsData, error: commentsError } = await supabase
         .from('khutbah_comments')
-        .select(`
-          id, 
-          content, 
-          created_at, 
-          user_id,
-          profiles:user_id (
-            display_name,
-            full_name,
-            email
-          )
-        `)
+        .select('id, content, created_at, user_id')
         .eq('khutbah_id', khutbahId)
         .order('created_at', { ascending: false });
 
-      if (sbError) throw sbError;
-      setComments(data as any || []);
+      if (commentsError) throw commentsError;
+
+      // Get unique user IDs to fetch profiles
+      const userIds = [...new Set(commentsData?.map(c => c.user_id).filter(Boolean))];
+
+      let enrichedComments: Comment[] = [];
+
+      if (userIds.length > 0) {
+        // Fetch profiles separately
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, display_name, full_name, email')
+          .in('id', userIds);
+
+        if (profilesError) console.warn("Could not fetch profiles:", profilesError.message);
+
+        // Create a map of profiles for fast lookup
+        const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+
+        // Combine comments with their profiles
+        enrichedComments = (commentsData || []).map(comment => ({
+          ...comment,
+          user_profile: profilesMap.get(comment.user_id) || null
+        }));
+      } else {
+        enrichedComments = (commentsData || []);
+      }
+
+      setComments(enrichedComments);
     } catch (err: any) {
       console.error('Error fetching comments:', err);
-      // Robust error message extraction to prevent [object Object] display
       const message = err?.message || (typeof err === 'string' ? err : 'Failed to load comments');
       setError(message);
     } finally {
@@ -82,21 +98,24 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
             user_id: user.id,
             content: commentText.trim()
           })
-          .select(`
-            id, 
-            content, 
-            created_at, 
-            user_id,
-            profiles:user_id (
-              display_name,
-              full_name,
-              email
-            )
-          `)
+          .select('id, content, created_at, user_id')
           .single();
 
         if (sbError) throw sbError;
-        setComments(prev => [data as any, ...prev]);
+
+        // Fetch the current user's profile to update the UI immediately
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('id, display_name, full_name, email')
+          .eq('id', user.id)
+          .single();
+
+        const newComment: Comment = {
+          ...data,
+          user_profile: profileData || null
+        };
+
+        setComments(prev => [newComment, ...prev]);
         setCommentText('');
       } catch (err: any) {
         console.error('Comment error:', err);
@@ -109,15 +128,12 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
   };
 
   const resolveUserDisplay = (comment: Comment) => {
-    // Handle Supabase returning profile as object or array
-    const profileData = comment.profiles;
-    const profile = Array.isArray(profileData) ? profileData[0] : profileData;
+    const profile = comment.user_profile;
     
     const email = profile?.email || "anonymous@minbar.ai";
     const isAdmin = email === 'zaid.aiesec@gmail.com';
     
-    // Priority: display_name -> email fallback
-    // We stop using User_ID prefixes here as requested.
+    // Priority: display_name (Zaid) -> email fallback
     const displayName = profile?.display_name || email;
 
     return { name: displayName, isAdmin };
