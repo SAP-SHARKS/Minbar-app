@@ -39,7 +39,7 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
     setLoading(true);
     setError(null);
     try {
-      // Fetch comments first - bypasses join relationship errors if foreign keys are tricky
+      // Fetch comments first
       const { data: commentsData, error: commentsError } = await supabase
         .from('khutbah_comments')
         .select('id, content, created_at, user_id')
@@ -48,7 +48,7 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
 
       if (commentsError) throw commentsError;
 
-      // Get unique user IDs to fetch profiles
+      // Get unique user IDs
       const userIds = [...new Set(commentsData?.map(c => c.user_id).filter(Boolean))];
 
       let enrichedComments: Comment[] = [];
@@ -62,10 +62,10 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
 
         if (profilesError) console.warn("Could not fetch profiles:", profilesError.message);
 
-        // Create a map of profiles for fast lookup
+        // Create a map of profiles
         const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
 
-        // Combine comments with their profiles
+        // Combine comments with profiles
         enrichedComments = (commentsData || []).map(comment => ({
           ...comment,
           user_profile: profilesMap.get(comment.user_id) || null
@@ -77,7 +77,8 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
       setComments(enrichedComments);
     } catch (err: any) {
       console.error('Error fetching comments:', err);
-      const message = err?.message || (typeof err === 'string' ? err : 'Failed to load comments');
+      // Fix for [object Object]: Ensure we extract the message string or stringify the object
+      const message = err?.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'Failed to load comments';
       setError(message);
     } finally {
       setLoading(false);
@@ -103,7 +104,7 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
 
         if (sbError) throw sbError;
 
-        // Fetch the current user's profile to update the UI immediately
+        // Fetch the user's profile
         const { data: profileData } = await supabase
           .from('profiles')
           .select('id, display_name, full_name, email')
@@ -119,7 +120,7 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
         setCommentText('');
       } catch (err: any) {
         console.error('Comment error:', err);
-        const message = err?.message || 'Unknown error';
+        const message = err?.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'Unknown error';
         alert('Failed to post comment: ' + message);
       } finally {
         setIsSubmitting(false);
@@ -133,14 +134,13 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
     const email = profile?.email || "anonymous@minbar.ai";
     const isAdmin = email === 'zaid.aiesec@gmail.com';
     
-    // Priority: display_name (Zaid) -> email fallback
     const displayName = profile?.display_name || email;
 
     return { name: displayName, isAdmin };
   };
 
   return (
-    <div className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-gray-100 w-full mt-12">
+    <div id="comments-section" className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-gray-100 w-full mt-12 scroll-mt-20">
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
           <MessageCircle size={24} className="text-blue-500" /> 

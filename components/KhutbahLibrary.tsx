@@ -109,8 +109,8 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({
   };
 
   const handleLikeClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevents card click
-    onLike?.(e, data.id); // Uses the handler
+    e.stopPropagation();
+    onLike?.(e, data.id);
   };
 
   const tagHoverClasses = "hover:bg-gray-900 hover:text-white hover:underline transition-all duration-200";
@@ -184,10 +184,16 @@ const KhutbahCard: React.FC<KhutbahCardProps> = ({
                  <Heart size={14} className={isLiked ? 'text-red-500 fill-red-500' : 'text-gray-400 group-hover:text-red-500 transition-colors'} /> 
                  {data.likes}
              </button>
-             <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-500 transition-colors">
+             <button 
+                onClick={(e) => {
+                    e.stopPropagation();
+                    if (onCommentClick) onCommentClick(e, data);
+                }}
+                className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-blue-500 transition-colors cursor-pointer"
+             >
                  <MessageCircle size={14} className="text-gray-400 group-hover:text-blue-500 transition-colors" /> 
                  {data.comments_count || 0}
-             </span>
+             </button>
              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
                  <Eye size={14} /> 
                  {data.view_count || 0}
@@ -343,6 +349,7 @@ const TopicPageView = ({
   onSelectKhutbah,
   onSelectImam,
   onTagClick,
+  onCommentClick,
   onLike,
   userLikes
 }: { 
@@ -351,6 +358,7 @@ const TopicPageView = ({
   onSelectKhutbah: (k: KhutbahPreview) => void;
   onSelectImam: (slug: string) => void;
   onTagClick: (slug: string) => void;
+  onCommentClick: (e: React.MouseEvent, k: KhutbahPreview) => void;
   onLike?: (e: React.MouseEvent | null, id: string) => void;
   userLikes?: Set<string>;
 }) => {
@@ -412,7 +420,11 @@ const TopicPageView = ({
       <h1 className="text-5xl md:text-6xl font-serif font-bold text-gray-900 mb-12"><span className="text-emerald-600">Topic:</span> {tagInfo?.name}</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {filteredKhutbahs.map(k => (
-          <KhutbahCard key={k.id} data={k} onClick={() => onSelectKhutbah(k)} onAuthorClick={() => handleAuthorClick(k.author)} onTagClick={onTagClick} onLike={onLike} isLiked={userLikes?.has(k.id)} />
+          <KhutbahCard 
+            key={k.id} data={k} onClick={() => onSelectKhutbah(k)} 
+            onAuthorClick={() => handleAuthorClick(k.author)} onTagClick={onTagClick} 
+            onCommentClick={onCommentClick} onLike={onLike} isLiked={userLikes?.has(k.id)} 
+          />
         ))}
       </div>
     </div>
@@ -458,6 +470,7 @@ const ImamProfileView = ({
   onSelectKhutbah,
   onNavigateDetails,
   onTagClick,
+  onCommentClick,
   onLike,
   userLikes
 }: { 
@@ -466,6 +479,7 @@ const ImamProfileView = ({
   onSelectKhutbah: (k: KhutbahPreview) => void;
   onNavigateDetails: (imam: Imam) => void;
   onTagClick: (slug: string) => void;
+  onCommentClick: (e: React.MouseEvent, k: KhutbahPreview) => void;
   onLike?: (e: React.MouseEvent | null, id: string) => void;
   userLikes?: Set<string>;
 }) => {
@@ -544,9 +558,10 @@ const ImamProfileView = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {sermons.map(s => (
           <KhutbahCard 
-            key={s.id} data={{ id: s.id, title: s.title, author: imam.name, likes: s.likes_count || 0, topic: s.topic, labels: s.tags, view_count: s.view_count || 0, published_at: s.created_at, rating: s.rating, imam_slug: s.imams?.slug }} 
+            key={s.id} data={{ id: s.id, title: s.title, author: imam.name, likes: s.likes_count || 0, topic: s.topic, labels: s.tags, view_count: s.view_count || 0, published_at: s.created_at, rating: s.rating, imam_slug: s.imams?.slug, comments_count: s.comments_count }} 
             onClick={() => onSelectKhutbah({ id: s.id } as any)} 
             onTagClick={onTagClick}
+            onCommentClick={onCommentClick}
             onLike={onLike}
             isLiked={userLikes?.has(s.id)}
           />
@@ -563,6 +578,7 @@ interface HomeViewProps {
     onSelectKhutbah: (k: KhutbahPreview) => void;
     onSelectImam: (slug: string) => void;
     onTagClick: (slug: string) => void;
+    onCommentClick: (e: React.MouseEvent, k: KhutbahPreview) => void;
     onBookmark: (e: React.MouseEvent | null, id: string) => void;
     onLike: (e: React.MouseEvent | null, id: string) => void;
     userBookmarks: Set<string>;
@@ -576,6 +592,7 @@ const HomeView: React.FC<HomeViewProps> = ({
     onSelectKhutbah,
     onSelectImam,
     onTagClick,
+    onCommentClick,
     onBookmark,
     onLike,
     userBookmarks,
@@ -607,7 +624,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                     {data.latest.map((k: KhutbahPreview) => (
                         <KhutbahCard 
                             key={k.id} data={k} onClick={() => onSelectKhutbah(k)} 
-                            onAuthorClick={handleAuthorClick} onTagClick={onTagClick} 
+                            onAuthorClick={handleAuthorClick} onTagClick={onTagClick} onCommentClick={onCommentClick}
                             onBookmark={(e) => onBookmark(e, k.id)} onLike={(e) => onLike(e, k.id)}
                             isBookmarked={userBookmarks.has(k.id)}
                             isLiked={userLikes.has(k.id)}
@@ -628,7 +645,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                     {data.trending.map((k: KhutbahPreview) => (
                         <KhutbahCard 
                             key={k.id} data={k} onClick={() => onSelectKhutbah(k)} 
-                            onAuthorClick={handleAuthorClick} onTagClick={onTagClick} 
+                            onAuthorClick={handleAuthorClick} onTagClick={onTagClick} onCommentClick={onCommentClick}
                             onBookmark={(e) => onBookmark(e, k.id)} onLike={(e) => onLike(e, k.id)}
                             isBookmarked={userBookmarks.has(k.id)}
                             isLiked={userLikes.has(k.id)}
@@ -684,7 +701,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                         <div key={k.id} className="min-w-[300px] w-[300px]">
                             <KhutbahCard 
                                 data={k} onClick={() => onSelectKhutbah(k)} 
-                                onAuthorClick={handleAuthorClick} onTagClick={onTagClick} 
+                                onAuthorClick={handleAuthorClick} onTagClick={onTagClick} onCommentClick={onCommentClick}
                                 onBookmark={(e) => onBookmark(e, k.id)} onLike={(e) => onLike(e, k.id)}
                                 isBookmarked={userBookmarks.has(k.id)}
                                 isLiked={userLikes.has(k.id)}
@@ -709,6 +726,7 @@ interface ListViewProps {
     onBack: () => void;
     onSelectImam: (slug: string) => void;
     onTagClick: (slug: string) => void;
+    onCommentClick: (e: React.MouseEvent, k: KhutbahPreview) => void;
     onBookmark: (e: React.MouseEvent | null, id: string) => void;
     onLike: (e: React.MouseEvent | null, id: string) => void;
     userBookmarks: Set<string>;
@@ -718,7 +736,7 @@ interface ListViewProps {
 const ListView: React.FC<ListViewProps> = ({ 
     data, count, hasMore, isLoading, loadMore, filters, 
     setFilters, onSelectKhutbah, onBack, onSelectImam, 
-    onTagClick, onBookmark, onLike, userBookmarks, userLikes
+    onTagClick, onCommentClick, onBookmark, onLike, userBookmarks, userLikes
 }) => {
     const lastElementRef = useInfiniteScroll(loadMore, hasMore, isLoading);
     const handleAuthorClick = (authorName: string) => { setFilters({ ...filters, imam: authorName }); };
@@ -741,7 +759,7 @@ const ListView: React.FC<ListViewProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
                 {data.map((k, index) => (
                     <div key={k.id} ref={index === data.length - 1 ? lastElementRef : null}>
-                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onAuthorClick={handleAuthorClick} onTagClick={onTagClick} onBookmark={(e) => onBookmark(e, k.id)} onLike={(e) => onLike(e, k.id)} isBookmarked={userBookmarks.has(k.id)} isLiked={userLikes.has(k.id)} />
+                        <KhutbahCard data={k} onClick={() => onSelectKhutbah(k)} onAuthorClick={handleAuthorClick} onTagClick={onTagClick} onCommentClick={onCommentClick} onBookmark={(e) => onBookmark(e, k.id)} onLike={(e) => onLike(e, k.id)} isBookmarked={userBookmarks.has(k.id)} isLiked={userLikes.has(k.id)} />
                     </div>
                 ))}
             </div>
@@ -892,7 +910,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     } catch (err) { console.error("Bookmark error:", err); }
   };
 
-  const handleSelectKhutbah = async (preview: KhutbahPreview) => {
+  const handleSelectKhutbah = async (preview: KhutbahPreview, scrollToComments = false) => {
       await incrementViews(preview.id);
       setSelectedKhutbahId(preview.id);
       setView('detail');
@@ -910,8 +928,22 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   const { data: userData } = await supabase.from('user_khutbahs').select('id').eq('user_id', currentUser.id).eq('source_khutbah_id', data.id).maybeSingle();
                   if (userData) setIsInMyKhutbahs(true);
               }
+
+              // Implementation of "Scroll to Comments"
+              if (scrollToComments) {
+                setTimeout(() => {
+                    const commentsSection = document.getElementById('comments-section');
+                    if (commentsSection) {
+                        commentsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                }, 200);
+              }
           }
       } catch (err) { console.error("Error fetching detail:", err); } finally { setDetailLoading(false); }
+  };
+
+  const handleCommentClick = (e: React.MouseEvent, preview: KhutbahPreview) => {
+    handleSelectKhutbah(preview, true);
   };
 
   const handleAddCopy = async () => {
@@ -934,9 +966,9 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   };
 
   if (view === 'imams-list') { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <ImamsListView onBack={() => setView('home')} onSelectImam={handleSelectImam} /> </div> </div> </div> ); }
-  if (view === 'topic-page' && selectedTopicSlug) { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <TopicPageView slug={selectedTopicSlug} onBack={() => setView('home')} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onLike={handleLike} userLikes={userLikes} /> </div> </div> </div> ); }
+  if (view === 'topic-page' && selectedTopicSlug) { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <TopicPageView slug={selectedTopicSlug} onBack={() => setView('home')} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onCommentClick={handleCommentClick} onLike={handleLike} userLikes={userLikes} /> </div> </div> </div> ); }
   if (view === 'imam-details' && activeImam) { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <ImamDetailedView imam={activeImam} onBack={() => setView('imam-profile')} /> </div> </div> </div> ); }
-  if (view === 'imam-profile' && selectedImamSlug) { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <ImamProfileView slug={selectedImamSlug} onBack={() => setView('home')} onSelectKhutbah={handleSelectKhutbah} onNavigateDetails={handleNavigateImamDetails} onTagClick={handleSelectTopic} onLike={handleLike} userLikes={userLikes} /> </div> </div> </div> ); }
+  if (view === 'imam-profile' && selectedImamSlug) { return ( <div className="flex h-screen md:pl-20 bg-white overflow-hidden"> <div className="flex-1 overflow-y-auto"> <div className="page-container py-8 xl:py-12"> <ImamProfileView slug={selectedImamSlug} onBack={() => setView('home')} onSelectKhutbah={handleSelectKhutbah} onNavigateDetails={handleNavigateImamDetails} onTagClick={handleSelectTopic} onCommentClick={handleCommentClick} onLike={handleLike} userLikes={userLikes} /> </div> </div> </div> ); }
 
   if (view === 'detail') {
       if (detailLoading || !detailData) return <div className="h-screen flex items-center justify-center"><Loader2 size={48} className="animate-spin text-emerald-600"/></div>;
@@ -1024,8 +1056,8 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
              </div>
           )}
         </div>
-        {view === 'home' && <HomeView data={homeData} isLoading={homeLoading} onNavigate={handleNavigate} onSelectKhutbah= {handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} userLikes={userLikes} />}
-        {view === 'list' && ( <ListView data={listData} count={count} hasMore={hasMore} isLoading={listLoading} loadMore={loadMore} filters={activeFilters} setFilters={setActiveFilters} onSelectKhutbah={handleSelectKhutbah} onBack={() => setView('home')} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} userLikes={userLikes} /> )}
+        {view === 'home' && <HomeView data={homeData} isLoading={homeLoading} onNavigate={handleNavigate} onSelectKhutbah= {handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onCommentClick={handleCommentClick} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} userLikes={userLikes} />}
+        {view === 'list' && ( <ListView data={listData} count={count} hasMore={hasMore} isLoading={listLoading} loadMore={loadMore} filters={activeFilters} setFilters={setActiveFilters} onSelectKhutbah={handleSelectKhutbah} onBack={() => setView('home')} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onCommentClick={handleCommentClick} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} userLikes={userLikes} /> )}
       </div>
     </div>
   );
