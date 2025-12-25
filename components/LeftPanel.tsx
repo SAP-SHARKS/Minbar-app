@@ -1,5 +1,5 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, Sparkles } from 'lucide-react';
 
 interface LeftPanelProps {
   activeTool: string | null;
@@ -10,32 +10,41 @@ export function LeftPanel({ activeTool, onClose }: LeftPanelProps) {
   if (!activeTool) return null;
 
   return (
-    <div className="w-72 bg-white border-r border-gray-200 flex flex-col animate-in slide-in-from-left-4 duration-200 shadow-xl z-20 absolute left-16 h-full top-0">
-      {/* Panel Header */}
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-        <h3 className="font-bold text-gray-800">
-          {activeTool === 'template' && '📝 Templates'}
-          {activeTool === 'topic' && '🎯 Topic & Occasion'}
-          {activeTool === 'rewrite' && '🔄 AI Rewrite'}
-          {activeTool === 'snippets' && '💾 Snippets'}
-          {activeTool === 'ai' && '✨ AI Assist'}
-          {activeTool === 'settings' && '⚙️ Settings'}
-        </h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100">
-          <X size={18} />
-        </button>
-      </div>
+    <>
+      {/* Mobile Overlay - only show on mobile when panel is open */}
+      <div
+        className="md:hidden fixed inset-0 bg-black/50 z-30"
+        onClick={onClose}
+      />
 
-      {/* Panel Content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {activeTool === 'template' && <TemplatePanel />}
-        {activeTool === 'topic' && <TopicPanel />}
-        {activeTool === 'rewrite' && <RewritePanel />}
-        {activeTool === 'snippets' && <SnippetsPanel />}
-        {activeTool === 'ai' && <AIAssistPanel />}
-        {activeTool === 'settings' && <div className="text-gray-500 text-sm text-center py-10">Editor Settings</div>}
+      {/* Panel */}
+      <div className="w-full md:w-72 bg-white border-r border-gray-200 flex flex-col animate-in slide-in-from-left-4 duration-200 shadow-xl z-40 md:z-20 absolute left-0 md:left-16 h-full top-0">
+        {/* Panel Header */}
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0">
+          <h3 className="font-bold text-gray-800 flex items-center gap-2">
+            {activeTool === 'template' && '📝 Templates'}
+            {activeTool === 'topic' && '🎯 Topic & Occasion'}
+            {activeTool === 'rewrite' && '🔄 AI Rewrite'}
+            {activeTool === 'snippets' && '💾 Snippets'}
+            {activeTool === 'ai' && '✨ AI Assist'}
+            {activeTool === 'settings' && '⚙️ Settings'}
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Panel Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTool === 'template' && <TemplatePanel />}
+          {activeTool === 'topic' && <TopicPanel />}
+          {activeTool === 'rewrite' && <RewritePanel />}
+          {activeTool === 'snippets' && <SnippetsPanel />}
+          {activeTool === 'ai' && <AIAssistPanel />}
+          {activeTool === 'settings' && <div className="text-gray-500 text-sm text-center py-10 font-bold uppercase tracking-widest opacity-30">Editor Settings</div>}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -51,14 +60,14 @@ function TemplatePanel() {
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-500">Choose a template to start:</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Choose a structure:</p>
       {templates.map(t => (
         <button
           key={t.id}
-          className="w-full p-3 text-left border border-gray-200 rounded-xl hover:border-emerald-500 hover:bg-emerald-50 transition-colors"
+          className="w-full p-4 text-left border border-gray-100 rounded-2xl hover:border-emerald-500 hover:bg-emerald-50 transition-all group"
         >
-          <div className="font-medium text-gray-800">{t.name}</div>
-          <div className="text-xs text-gray-500">{t.description}</div>
+          <div className="font-bold text-gray-800 group-hover:text-emerald-700">{t.name}</div>
+          <div className="text-xs text-gray-400 group-hover:text-emerald-600/70">{t.description}</div>
         </button>
       ))}
     </div>
@@ -68,10 +77,10 @@ function TemplatePanel() {
 // Topic & Occasion Panel
 function TopicPanel() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
-        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Occasion</label>
-        <select className="w-full p-2.5 border border-gray-200 rounded-lg text-sm bg-white">
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Occasion</label>
+        <select className="w-full p-3 border border-gray-100 bg-gray-50 rounded-xl text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-emerald-500/20">
           <option>Jummah</option>
           <option>Eid ul-Fitr</option>
           <option>Eid ul-Adha</option>
@@ -82,17 +91,17 @@ function TopicPanel() {
       </div>
 
       <div>
-        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Topic</label>
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Topic</label>
         <input 
           type="text"
           placeholder="e.g. Patience, Gratitude..."
-          className="w-full p-2.5 border border-gray-200 rounded-lg text-sm"
+          className="w-full p-3 border border-gray-100 bg-gray-50 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-500/20"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Tone</label>
-        <select className="w-full p-2.5 border border-gray-200 rounded-lg text-sm bg-white">
+        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Tone</label>
+        <select className="w-full p-3 border border-gray-100 bg-gray-50 rounded-xl text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-emerald-500/20">
           <option>Inspirational</option>
           <option>Educational</option>
           <option>Admonishing</option>
@@ -101,17 +110,8 @@ function TopicPanel() {
         </select>
       </div>
 
-      <div>
-        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Target Length</label>
-        <select className="w-full p-2.5 border border-gray-200 rounded-lg text-sm bg-white">
-          <option>Short (10-15 min)</option>
-          <option>Medium (15-25 min)</option>
-          <option>Long (25-35 min)</option>
-        </select>
-      </div>
-
-      <button className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 shadow-sm text-sm">
-        Generate Khutbah
+      <button className="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all text-sm uppercase tracking-widest">
+        Generate Outline
       </button>
     </div>
   );
@@ -121,23 +121,23 @@ function TopicPanel() {
 function RewritePanel() {
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-500">Select text in the editor, then choose:</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Refine selected text:</p>
       
       {[
         { label: 'Make it simpler', icon: '📖' },
         { label: 'Make it more eloquent', icon: '✨' },
         { label: 'Add more detail', icon: '📝' },
         { label: 'Shorten it', icon: '✂️' },
-        { label: 'Add hadith reference', icon: '📚' },
+        { label: 'Add Hadith reference', icon: '📚' },
         { label: 'Add Quran reference', icon: '📗' },
         { label: 'Translate to Arabic', icon: '🌙' },
       ].map((option) => (
         <button
           key={option.label}
-          className="w-full p-3 text-left border border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-colors flex items-center gap-3 text-sm"
+          className="w-full p-4 text-left border border-gray-100 rounded-2xl hover:border-purple-500 hover:bg-purple-50 transition-all flex items-center gap-3 group"
         >
-          <span>{option.icon}</span>
-          <span className="font-medium text-gray-700">{option.label}</span>
+          <span className="text-xl group-hover:scale-110 transition-transform">{option.icon}</span>
+          <span className="font-bold text-gray-700 group-hover:text-purple-700 text-sm">{option.label}</span>
         </button>
       ))}
     </div>
@@ -153,20 +153,20 @@ function SnippetsPanel() {
   ];
 
   return (
-    <div className="space-y-3">
-      <button className="w-full py-2 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-emerald-500 hover:text-emerald-600 text-sm font-medium">
-        + Save Selection as Snippet
+    <div className="space-y-4">
+      <button className="w-full py-4 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 hover:border-emerald-500 hover:text-emerald-600 text-xs font-bold uppercase tracking-widest transition-all">
+        + Save Selection
       </button>
       
-      <div className="text-xs font-bold text-gray-500 uppercase mt-4 mb-2">Your Snippets</div>
+      <div className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] mt-8 mb-2">Saved Fragments</div>
       
       {snippets.map(s => (
         <div
           key={s.id}
-          className="p-3 border border-gray-200 rounded-xl hover:border-emerald-500 cursor-pointer bg-gray-50"
+          className="p-4 border border-gray-100 rounded-2xl hover:border-emerald-500 cursor-pointer bg-gray-50/50 hover:bg-white transition-all group shadow-sm hover:shadow-md"
         >
-          <div className="font-medium text-gray-800 text-sm">{s.title}</div>
-          <div className="text-xs text-gray-500 truncate mt-1 font-serif">{s.preview}</div>
+          <div className="font-bold text-gray-800 text-sm mb-1 group-hover:text-emerald-600">{s.title}</div>
+          <div className="text-xs text-gray-400 truncate font-serif">{s.preview}</div>
         </div>
       ))}
     </div>
@@ -176,8 +176,13 @@ function SnippetsPanel() {
 // AI Assist Panel
 function AIAssistPanel() {
     return (
-        <div className="text-center py-10">
-            <p className="text-sm text-gray-500">AI Assistant is ready.</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-4">
+              {/* Fix: Sparkles is now imported from lucide-react */}
+              <Sparkles size={32} />
+            </div>
+            <p className="text-sm font-bold text-gray-800 uppercase tracking-widest mb-2">AI Assistant Active</p>
+            <p className="text-xs text-gray-400 px-4">Highlight text or use the prompts to generate content automatically.</p>
         </div>
     )
 }
