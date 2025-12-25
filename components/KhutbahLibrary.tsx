@@ -928,7 +928,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                   const { data: userData } = await supabase.from('user_khutbahs').select('id').eq('user_id', currentUser.id).eq('source_khutbah_id', data.id).maybeSingle();
                   if (userData) setIsInMyKhutbahs(true);
               }
-
+              
               // Implementation of "Scroll to Comments"
               if (scrollToComments) {
                 setTimeout(() => {
@@ -936,7 +936,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                     if (commentsSection) {
                         commentsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }
-                }, 200);
+                }, 150);
               }
           }
       } catch (err) { console.error("Error fetching detail:", err); } finally { setDetailLoading(false); }

@@ -77,7 +77,7 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
       setComments(enrichedComments);
     } catch (err: any) {
       console.error('Error fetching comments:', err);
-      // Fix for [object Object]: Ensure we extract the message string or stringify the object
+      // Fix for [object Object]: Strictly extract the message string
       const message = err?.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'Failed to load comments';
       setError(message);
     } finally {
@@ -120,7 +120,7 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
         setCommentText('');
       } catch (err: any) {
         console.error('Comment error:', err);
-        const message = err?.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'Unknown error';
+        const message = err?.message || 'Unknown error';
         alert('Failed to post comment: ' + message);
       } finally {
         setIsSubmitting(false);
@@ -134,7 +134,7 @@ export const KhutbahComments: React.FC<KhutbahCommentsProps> = ({ khutbahId }) =
     const email = profile?.email || "anonymous@minbar.ai";
     const isAdmin = email === 'zaid.aiesec@gmail.com';
     
-    const displayName = profile?.display_name || email;
+    const displayName = profile?.display_name || profile?.full_name || email;
 
     return { name: displayName, isAdmin };
   };
