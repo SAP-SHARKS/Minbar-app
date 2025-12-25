@@ -12,6 +12,7 @@ import { Khutbah, KhutbahPreview, AuthorData, Imam, Topic } from '../types';
 import { supabase } from '../supabaseClient';
 import { useHomepageData, usePaginatedKhutbahs, useInfiniteScroll } from '../hooks';
 import { useAuth } from '../contexts/AuthContext';
+import { KhutbahComments } from './KhutbahComments';
 
 interface KhutbahLibraryProps {
   user: any;
@@ -767,10 +768,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
   const [addingToMyKhutbahs, setAddingToMyKhutbahs] = useState(false);
   const [khutbahCards, setKhutbahCards] = useState<any[]>([]);
   
-  const [comments, setComments] = useState<any[]>([]);
-  const [commentText, setCommentText] = useState('');
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  
   const { user: authUser, requireAuth } = useAuth(); 
 
   const { data: homeData, isLoading: homeLoading, setData: setHomeData, refresh: refreshHome } = useHomepageData();
@@ -895,31 +892,6 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
     } catch (err) { console.error("Bookmark error:", err); }
   };
 
-  const handlePostComment = async () => {
-    if (!commentText.trim() || !detailData) return;
-    requireAuth('Sign in to post a comment.', async () => {
-      const currentUser = authUser || user;
-      if (!currentUser || !detailData) return;
-      setIsSubmittingComment(true);
-      try {
-        const { data, error } = await supabase.from('khutbah_comments').insert({ 
-          khutbah_id: detailData.id, 
-          user_id: currentUser.id, 
-          content: commentText.trim() // Standardized to 'content'
-        }).select().single();
-        
-        if (error) throw error;
-        setComments(prev => [data, ...prev]);
-        setCommentText('');
-      } catch (err: any) { 
-        console.error("Comment error:", err); 
-        alert("Failed to post comment: " + err.message); 
-      } finally { 
-        setIsSubmittingComment(false); 
-      }
-    });
-  };
-
   const handleSelectKhutbah = async (preview: KhutbahPreview) => {
       await incrementViews(preview.id);
       setSelectedKhutbahId(preview.id);
@@ -927,15 +899,12 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       setDetailLoading(true);
       setIsInMyKhutbahs(false);
       setKhutbahCards([]);
-      setCommentText('');
       try {
           const { data } = await supabase.from('khutbahs').select('*').eq('id', preview.id).single();
           if (data) {
               setDetailData({ id: data.id, title: data.title, author: data.author, topic: data.topic, labels: data.tags, likes: data.likes_count, content: data.extracted_text || data.content, style: data.topic, date: data.created_at ? new Date(data.created_at).toLocaleDateString() : undefined, file_url: data.file_url, comments: [], view_count: (data.view_count || 0) + 1 });
               const { data: cardsData } = await supabase.from('khutbah_cards').select('*').eq('khutbah_id', data.id).order('card_number', { ascending: true });
               if (cardsData) setKhutbahCards(cardsData);
-              const { data: comms } = await supabase.from('khutbah_comments').select('*').eq('khutbah_id', data.id).order('created_at', { ascending: false });
-              setComments(comms || []);
               const currentUser = authUser || user;
               if (currentUser) {
                   const { data: userData } = await supabase.from('user_khutbahs').select('id').eq('user_id', currentUser.id).eq('source_khutbah_id', data.id).maybeSingle();
@@ -1005,24 +974,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-20">
                     <div className="lg:col-span-2 min-w-0">
                         <div className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-gray-100 w-full overflow-hidden min-h-[600px] mb-8 font-serif" style={{ fontSize: `${contentFontSize}px` }} dangerouslySetInnerHTML={{ __html: detailData.content || '' }} />
-                        <div className="bg-white rounded-[2rem] p-8 md:p-12 shadow-sm border border-gray-100 w-full">
-                           <h3 className="text-2xl font-bold text-gray-900 mb-8 flex items-center gap-3"><MessageCircle size={24} className="text-blue-500" /> Community Discussion ({comments.length})</h3>
-                           <div className="mb-10">
-                              <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Add a comment..." className="w-full p-6 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all resize-none h-32" />
-                              <div className="flex justify-end mt-4"><button onClick={handlePostComment} disabled={isSubmittingComment || !commentText.trim()} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-md disabled:opacity-50">{isSubmittingComment ? <Loader2 size={20} className="animate-spin" /> : "Post Comment"}</button></div>
-                           </div>
-                           <div className="space-y-6">
-                            {comments.map(c => (
-                              <div key={c.id} className="p-6 bg-gray-50/50 rounded-2xl border border-gray-50">
-                                <div className="flex justify-between mb-2">
-                                  <div className="font-bold text-gray-900">User_{c.id.substring(0,4)}</div>
-                                  <div className="text-xs text-gray-400">{new Date(c.created_at).toLocaleDateString()}</div>
-                                </div>
-                                <p className="text-gray-600 leading-relaxed">{c.content}</p>
-                              </div>
-                            ))}
-                           </div>
-                        </div>
+                        {detailData && <KhutbahComments khutbahId={detailData.id} />}
                     </div>
                     <div className="lg:col-span-1">
                       <div className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm sticky top-6">
@@ -1072,7 +1024,7 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
              </div>
           )}
         </div>
-        {view === 'home' && <HomeView data={homeData} isLoading={homeLoading} onNavigate={handleNavigate} onSelectKhutbah={handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} userLikes={userLikes} />}
+        {view === 'home' && <HomeView data={homeData} isLoading={homeLoading} onNavigate={handleNavigate} onSelectKhutbah= {handleSelectKhutbah} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} userLikes={userLikes} />}
         {view === 'list' && ( <ListView data={listData} count={count} hasMore={hasMore} isLoading={listLoading} loadMore={loadMore} filters={activeFilters} setFilters={setActiveFilters} onSelectKhutbah={handleSelectKhutbah} onBack={() => setView('home')} onSelectImam={handleSelectImam} onTagClick={handleSelectTopic} onBookmark={handleBookmark} onLike={handleLike} userBookmarks={userBookmarks} userLikes={userLikes} /> )}
       </div>
     </div>
