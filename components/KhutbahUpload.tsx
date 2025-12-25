@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileSpreadsheet, FileText, CheckCircle, AlertCircle, 
   Loader2, UploadCloud, Plus, Check, User, ExternalLink, AlertTriangle, Info, Play, RefreshCw, Upload,
-  Lock, ShieldAlert
+  Lock, ShieldAlert, Square
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import * as XLSX from 'xlsx';
@@ -25,7 +25,7 @@ const normalizeSpeaker = (s: string) => {
     .trim();
 };
 
-const fetchApi = async (url: string, body: any, token?: string, retries = 3, delay = 2000) => {
+const fetchApi = async (url: string, body: any, token?: string, signal?: AbortSignal, retries = 3, delay = 2000) => {
   for (let i = 0; i <= retries; i++) {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -34,7 +34,8 @@ const fetchApi = async (url: string, body: any, token?: string, retries = 3, del
       const response = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal // Allows cancellation
       });
 
       if (response.status === 429) {
@@ -49,6 +50,8 @@ const fetchApi = async (url: string, body: any, token?: string, retries = 3, del
       }
       return await response.json();
     } catch (err: any) {
+      // Don't retry if manually aborted
+      if (err.name === 'AbortError') throw err;
       if (i === retries) throw err;
       await new Promise(r => setTimeout(r, delay));
     }
@@ -218,7 +221,7 @@ const ExcelImportSection = ({ onSuccess }: { onSuccess: () => void }) => {
           </div>
           <div className="flex flex-col items-end gap-3">
              <div className="flex gap-3">
-                <button onClick={() => setShowPreview(false)} className="px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors">Cancel</button>
+                <button onClick={() => setShowPreview(false)} className="px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-100 transition-colors">Cancel</button>
                 <button 
                   onClick={importToDatabase} 
                   disabled={isImporting || !isAdmin} 
@@ -261,6 +264,7 @@ const PdfUploadSection = () => {
   const [files, setFiles] = useState<any[]>([]);
   const [imams, setImams] = useState<Imam[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -319,6 +323,14 @@ const PdfUploadSection = () => {
     }
   };
 
+  const handleStopProcessing = () => {
+    if (abortController) {
+      abortController.abort();
+      setIsProcessing(false);
+      setAbortController(null);
+    }
+  };
+
   async function processAllFiles() {
     // Explicit Admin Auth Session Validation
     const { data: { session } } = await supabase.auth.getSession();
@@ -327,95 +339,118 @@ const PdfUploadSection = () => {
       return;
     }
     
+    const controller = new AbortController();
+    setAbortController(controller);
     setIsProcessing(true);
-    for (let i = 0; i < files.length; i++) {
-      if (files[i].status === 'done' || files[i].status === 'updated') continue;
-      
-      setCurrentIndex(i);
-      setFiles(prev => {
-        const next = [...prev];
-        next[i].status = 'processing';
-        return next;
-      });
 
-      try {
-        const item = files[i];
-        if (!item.parsedIndex || !item.speakerKey) throw new Error("Invalid filename format.");
+    try {
+      for (let i = 0; i < files.length; i++) {
+        // Check for cancellation
+        if (controller.signal.aborted) break;
 
-        const { data: imam } = await supabase.from('imams').select('id').eq('name', item.parsedSpeaker).maybeSingle();
-        if (!imam) throw new Error(`Unknown Imam: ${item.parsedSpeaker}`);
-
-        const { data: match } = await supabase
-          .from('khutbahs')
-          .select('id, title')
-          .eq('imam_id', imam.id)
-          .eq('speaker_file_index', item.parsedIndex)
-          .maybeSingle();
-
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve((reader.result as string).split(',')[1]);
-          reader.readAsDataURL(item.file);
-        });
+        if (files[i].status === 'done' || files[i].status === 'updated') continue;
         
-        const { text: rawText } = await fetchApi('/api/extract-pdf', { base64, fileName: item.name }, session?.access_token);
+        setCurrentIndex(i);
+        setFiles(prev => {
+          const next = [...prev];
+          next[i].status = 'processing';
+          return next;
+        });
 
-        // SANITIZE & TRUNCATE (Fix 400 error)
-        const sanitizedContent = (rawText || '')
-            .trim()
-            .replace(/[^\x20-\x7E\s\u0600-\u06FF]/g, '') // Keep basic chars + Arabic
-            .substring(0, 35000); // Strict size limit for API payload stability
+        try {
+          const item = files[i];
+          if (!item.parsedIndex || !item.speakerKey) throw new Error("Invalid filename format.");
 
-        let khutbahId;
-        let action: 'updated' | 'done';
+          const { data: imam } = await supabase.from('imams').select('id').eq('name', item.parsedSpeaker).maybeSingle();
+          if (!imam) throw new Error(`Unknown Imam: ${item.parsedSpeaker}`);
 
-        if (match) {
-          khutbahId = (match as any).id;
-          action = 'updated';
-        } else {
-          const { data: newRow, error: insErr } = await supabase.from('khutbahs').insert({
-            title: item.name.replace('.pdf', '').replace(/_/g, ' '),
-            imam_id: imam.id,
-            author: item.parsedSpeaker,
-            speaker_key: item.speakerKey,
-            speaker_file_index: item.parsedIndex,
-            rating: 4.8
-          }).select().single();
-          if (insErr) throw insErr;
-          khutbahId = (newRow as any).id;
-          action = 'done';
+          const { data: match } = await supabase
+            .from('khutbahs')
+            .select('id, title')
+            .eq('imam_id', imam.id)
+            .eq('speaker_file_index', item.parsedIndex)
+            .maybeSingle();
+
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve((reader.result as string).split(',')[1]);
+            reader.onerror = () => reject(new Error("File read error"));
+            reader.readAsDataURL(item.file);
+          });
+          
+          const { text: rawText } = await fetchApi('/api/extract-pdf', { 
+            base64, fileName: item.name 
+          }, session?.access_token, controller.signal);
+
+          // Check again after heavy async
+          if (controller.signal.aborted) break;
+
+          // SANITIZE & TRUNCATE (Fix 400 error)
+          const sanitizedContent = (rawText || '')
+              .trim()
+              .replace(/[^\x20-\x7E\s\u0600-\u06FF]/g, '') // Keep basic chars + Arabic
+              .substring(0, 35000); // Strict size limit for API payload stability
+
+          let khutbahId;
+          let action: 'updated' | 'done';
+
+          if (match) {
+            khutbahId = (match as any).id;
+            action = 'updated';
+          } else {
+            const { data: newRow, error: insErr } = await supabase.from('khutbahs').insert({
+              title: item.name.replace('.pdf', '').replace(/_/g, ' '),
+              imam_id: imam.id,
+              author: item.parsedSpeaker,
+              speaker_key: item.speakerKey,
+              speaker_file_index: item.parsedIndex,
+              rating: 4.8
+            }).select().single();
+            if (insErr) throw insErr;
+            khutbahId = (newRow as any).id;
+            action = 'done';
+          }
+
+          // Phase 1: Enrich into semantic HTML layout
+          setFiles(prev => { const n = [...prev]; n[i].status = 'sanitizing'; return n; });
+          const formatData = await fetchApi('/api/process-khutbah', { 
+              content: sanitizedContent, type: 'format', khutbahId: khutbahId 
+          }, session?.access_token, controller.signal);
+          
+          if (controller.signal.aborted) break;
+
+          // Phase 2: AI Summarization into Card Deck
+          await fetchApi('/api/process-khutbah', { 
+              content: formatData.result, type: 'cards', khutbahId: khutbahId 
+          }, session?.access_token, controller.signal);
+
+          setFiles(prev => {
+            const next = [...prev];
+            next[i].status = action;
+            return next;
+          });
+
+          // Throttle to respect API limits
+          await new Promise(r => setTimeout(r, 1800));
+        } catch (err: any) {
+          if (err.name === 'AbortError') throw err;
+          console.error(`File processing error (${files[i].name}):`, err);
+          setFiles(prev => {
+            const next = [...prev];
+            next[i].status = 'failed';
+            next[i].error = err.message || "Extraction Failed";
+            return next;
+          });
         }
-
-        // Phase 1: Enrich into semantic HTML layout
-        setFiles(prev => { const n = [...prev]; n[i].status = 'sanitizing'; return n; });
-        const formatData = await fetchApi('/api/process-khutbah', { 
-            content: sanitizedContent, type: 'format', khutbahId: khutbahId 
-        }, session?.access_token);
-        
-        // Phase 2: AI Summarization into Card Deck
-        await fetchApi('/api/process-khutbah', { 
-            content: formatData.result, type: 'cards', khutbahId: khutbahId 
-        }, session?.access_token);
-
-        setFiles(prev => {
-          const next = [...prev];
-          next[i].status = action;
-          return next;
-        });
-
-        // Throttle to respect API limits
-        await new Promise(r => setTimeout(r, 1800));
-      } catch (err: any) {
-        console.error(`File processing error (${files[i].name}):`, err);
-        setFiles(prev => {
-          const next = [...prev];
-          next[i].status = 'failed';
-          next[i].error = err.message || "Extraction Failed";
-          return next;
-        });
       }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.log('Batch processing stopped by user');
+      }
+    } finally {
+      setIsProcessing(false);
+      setAbortController(null);
     }
-    setIsProcessing(false);
   }
 
   return (
@@ -427,7 +462,11 @@ const PdfUploadSection = () => {
          </div>
          {isAdmin ? (
            files.length > 0 && (
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold hover:bg-emerald-100 transition-all border border-emerald-100">
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              disabled={isProcessing}
+              className="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold hover:bg-emerald-100 transition-all border border-emerald-100 disabled:opacity-50"
+            >
                <Plus size={18}/> Add More
             </button>
            )
@@ -470,15 +509,23 @@ const PdfUploadSection = () => {
           </div>
           <div className="flex flex-col items-end gap-3">
              <div className="flex gap-3">
-                <button onClick={() => setFiles([])} disabled={isProcessing} className="px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors">Clear All</button>
-                <button 
-                  onClick={processAllFiles} 
-                  disabled={isProcessing || files.length === 0 || !isAdmin} 
-                  className={`bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'shadow-emerald-100 hover:bg-emerald-700'}`}
-                >
-                    {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-                    {isAdmin ? 'Start Batch Processing' : 'Admin Authorization Required'}
-                </button>
+                <button onClick={() => setFiles([])} disabled={isProcessing} className="px-6 py-3 border border-gray-200 rounded-xl font-bold text-gray-500 hover:bg-gray-100 transition-colors disabled:opacity-50">Clear All</button>
+                {isProcessing ? (
+                  <button 
+                    onClick={handleStopProcessing} 
+                    className="bg-red-600 text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-red-100 hover:bg-red-700 transition-all"
+                  >
+                      <Square size={18} fill="currentColor" /> Stop Processing
+                  </button>
+                ) : (
+                  <button 
+                    onClick={processAllFiles} 
+                    disabled={files.length === 0 || !isAdmin} 
+                    className={`bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all ${!isAdmin ? 'opacity-50 cursor-not-allowed' : 'shadow-emerald-100 hover:bg-emerald-700'}`}
+                  >
+                      <Play size={18} /> {isAdmin ? 'Start Batch Processing' : 'Admin Authorization Required'}
+                  </button>
+                )}
              </div>
              {!isAdmin && (
                 <div className="flex items-center gap-1.5 text-red-500 font-bold text-xs uppercase tracking-wider">
@@ -517,7 +564,7 @@ export const KhutbahUpload: React.FC<KhutbahUploadProps> = ({ onSuccess }) => {
   const [mode, setMode] = useState<'excel' | 'pdf'>('excel');
 
   return (
-    <div className="flex h-full md:pl-20 bg-gray-50 overflow-y-auto w-full">
+    <div className="h-full md:pl-20 bg-gray-50 overflow-y-auto w-full">
       <div className="page-container py-8 xl:py-12">
          <div className="w-full">
             <div className="mb-8">
