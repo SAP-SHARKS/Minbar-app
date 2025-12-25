@@ -902,11 +902,21 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
       if (!currentUser || !detailData) return;
       setIsSubmittingComment(true);
       try {
-        const { data, error } = await supabase.from('khutbah_comments').insert({ khutbah_id: detailData.id, user_id: currentUser.id, comment_text: commentText.trim() }).select().single();
+        const { data, error } = await supabase.from('khutbah_comments').insert({ 
+          khutbah_id: detailData.id, 
+          user_id: currentUser.id, 
+          content: commentText.trim() // Standardized to 'content'
+        }).select().single();
+        
         if (error) throw error;
         setComments(prev => [data, ...prev]);
         setCommentText('');
-      } catch (err: any) { console.error("Comment error:", err); alert("Failed to post comment: " + err.message); } finally { setIsSubmittingComment(false); }
+      } catch (err: any) { 
+        console.error("Comment error:", err); 
+        alert("Failed to post comment: " + err.message); 
+      } finally { 
+        setIsSubmittingComment(false); 
+      }
     });
   };
 
@@ -1001,7 +1011,17 @@ export const KhutbahLibrary: React.FC<KhutbahLibraryProps> = ({ user, showHero, 
                               <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Add a comment..." className="w-full p-6 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all resize-none h-32" />
                               <div className="flex justify-end mt-4"><button onClick={handlePostComment} disabled={isSubmittingComment || !commentText.trim()} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-md disabled:opacity-50">{isSubmittingComment ? <Loader2 size={20} className="animate-spin" /> : "Post Comment"}</button></div>
                            </div>
-                           <div className="space-y-6">{comments.map(c => (<div key={c.id} className="p-6 bg-gray-50/50 rounded-2xl border border-gray-50"><div className="flex justify-between mb-2"><div className="font-bold text-gray-900">User_{c.id.substring(0,4)}</div><div className="text-xs text-gray-400">{new Date(c.created_at).toLocaleDateString()}</div></div><p className="text-gray-600 leading-relaxed">{c.comment_text}</p></div>))}</div>
+                           <div className="space-y-6">
+                            {comments.map(c => (
+                              <div key={c.id} className="p-6 bg-gray-50/50 rounded-2xl border border-gray-50">
+                                <div className="flex justify-between mb-2">
+                                  <div className="font-bold text-gray-900">User_{c.id.substring(0,4)}</div>
+                                  <div className="text-xs text-gray-400">{new Date(c.created_at).toLocaleDateString()}</div>
+                                </div>
+                                <p className="text-gray-600 leading-relaxed">{c.content}</p>
+                              </div>
+                            ))}
+                           </div>
                         </div>
                     </div>
                     <div className="lg:col-span-1">
